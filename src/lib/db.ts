@@ -263,7 +263,24 @@ const STORAGE_KEYS = {
   BEANS: 'coffeelab_beans',
   ROASTS: 'coffeelab_roasts',
   STEPS: 'coffeelab_steps',
-  TASTINGS: 'coffeelab_tastings'
+  TASTINGS: 'coffeelab_tastings',
+  PENDING_SYNC: 'coffeelab_pending_sync'
+};
+
+export type CloudSyncResult = {
+  ok: boolean;
+  error?: string;
+  pending?: boolean;
+};
+
+type CloudSyncPayload = {
+  action?: 'upsertBean' | 'deleteBean' | 'upsertRoast' | 'deleteRoast';
+  bean?: Bean;
+  roast?: Roast;
+  id?: string;
+  beans?: Bean[];
+  roasts?: Roast[];
+  steps?: RoastStep[];
 };
 
 function getLocalData<T>(key: string, seed: T[]): T[] {
@@ -293,45 +310,66 @@ function normalizeBean(bean: Bean): Bean {
   };
 }
 
-function persistCloudSync(payload: { beans?: Bean[]; roasts?: Roast[]; steps?: RoastStep[]; delete?: { type: 'bean' | 'roast'; id: string } }): void {
-  if (typeof window === 'undefined') return;
-
-  const body = JSON.stringify(payload);
-  const url = '/api/sheets';
-
-  try {
-    if ('sendBeacon' in navigator) {
-      const blob = new Blob([body], { type: 'application/json' });
-      if (navigator.sendBeacon(url, blob)) return;
-    }
-  } catch (error) {
-    console.warn('sendBeacon sync failed, falling back to fetch.', error);
-  }
-
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    keepalive: true,
-  }).catch((error) => {
-    console.warn('Background Google Sheets sync failed.', error);
-  });
+function getPendingSyncPayloads(): CloudSyncPayload[] {
+  return getLocalData<CloudSyncPayload>(STORAGE_KEYS.PENDING_SYNC, []);
 }
 
-async function fetchCloudSnapshot(): Promise<{ beans: Bean[]; roasts: Roast[]; steps: RoastStep[] } | null> {
-  if (typeof window === 'undefined') return null;
+function savePendingSyncPayloads(payloads: CloudSyncPayload[]): void {
+  saveLocalData(STORAGE_KEYS.PENDING_SYNC, payloads);
+}
+
+function enqueuePendingSync(payload: CloudSyncPayload): void {
+  const pending = getPendingSyncPayloads();
+  const deduped = pending.filter(item => {
+    if (payload.action === 'upsertBean' && item.action === 'upsertBean') return item.bean?.id !== payload.bean?.id;
+    if (payload.action === 'deleteBean' && item.action === 'deleteBean') return item.id !== payload.id;
+    if (payload.action === 'upsertRoast' && item.action === 'upsertRoast') return item.roast?.id !== payload.roast?.id;
+    if (payload.action === 'deleteRoast' && item.action === 'deleteRoast') return item.id !== payload.id;
+    return true;
+  });
+  savePendingSyncPayloads([...deduped, payload]);
+}
+
+async function postCloudSync(payload: CloudSyncPayload): Promise<CloudSyncResult> {
+  if (typeof window === 'undefined') return { ok: false, error: 'Browser environment is required.' };
+
+  try {
+    const response = await fetch('/api/sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || `Google Sheets sync failed: ${response.status}`);
+    }
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Google Sheets sync failed.';
+    console.warn('Background Google Sheets sync failed.', error);
+    enqueuePendingSync(payload);
+    return { ok: false, error: message, pending: true };
+  }
+}
+
+async function fetchCloudSnapshot(): Promise<({ beans: Bean[]; roasts: Roast[]; steps: RoastStep[] } & CloudSyncResult) | CloudSyncResult> {
+  if (typeof window === 'undefined') return { ok: false, error: 'Browser environment is required.' };
   try {
     const response = await fetch('/api/sheets', { cache: 'no-store' });
-    if (!response.ok) return null;
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    if (!response.ok || data?.ok === false) {
+      return { ok: false, error: data?.error || `Google Sheets fetch failed: ${response.status}` };
+    }
     return {
+      ok: true,
       beans: Array.isArray(data.beans) ? data.beans.map(normalizeBean) : [],
       roasts: Array.isArray(data.roasts) ? data.roasts : [],
       steps: Array.isArray(data.steps) ? data.steps : [],
     };
   } catch (error) {
     console.warn('Google Sheets snapshot fetch failed.', error);
-    return null;
+    return { ok: false, error: error instanceof Error ? error.message : 'Google Sheets snapshot fetch failed.' };
   }
 }
 
@@ -349,7 +387,7 @@ export const DBService = {
     return this.getBeans().find(b => b.id === id);
   },
 
-  saveBean(bean: Bean): Bean {
+  saveBean(bean: Bean, sync = true): Bean {
     const normalizedBean = normalizeBean(bean);
     const beans = this.getBeans();
     const index = beans.findIndex(b => b.id === normalizedBean.id);
@@ -359,15 +397,23 @@ export const DBService = {
       beans.push({ ...normalizedBean });
     }
     saveLocalData(STORAGE_KEYS.BEANS, beans);
-    persistCloudSync({ beans });
+    if (sync) void postCloudSync({ action: 'upsertBean', bean: normalizedBean });
     return normalizedBean;
   },
 
-  deleteBean(id: string): void {
+  deleteBean(id: string, sync = true): void {
     const beans = this.getBeans().filter(b => b.id !== id);
     saveLocalData(STORAGE_KEYS.BEANS, beans);
-    persistCloudSync({ beans, delete: { type: 'bean', id } });
+    if (sync) void postCloudSync({ action: 'deleteBean', id });
     // Cascade delete can be done, but we'll preserve roasts for history or let user know
+  },
+
+  saveBeanToCloud(bean: Bean): Promise<CloudSyncResult> {
+    return postCloudSync({ action: 'upsertBean', bean: normalizeBean(bean) });
+  },
+
+  deleteBeanFromCloud(id: string): Promise<CloudSyncResult> {
+    return postCloudSync({ action: 'deleteBean', id });
   },
 
   generateNextBeanId(): string {
@@ -423,7 +469,7 @@ export const DBService = {
     return this.getRoasts().find(r => r.id === id);
   },
 
-  saveRoast(roast: Roast, steps: RoastStep[]): Roast {
+  saveRoast(roast: Roast, steps: RoastStep[], sync = true): Roast {
     const roasts = this.getRoasts();
     const index = roasts.findIndex(r => r.id === roast.id);
     
@@ -444,12 +490,12 @@ export const DBService = {
       const oldRoast = roasts[index];
       const weightDiff = oldRoast.greenWeight - roast.greenWeight; // if green weight decreased, we give back stock. If increased, we deduct more.
       if (weightDiff !== 0) {
-        this.adjustBeanWeight(roast.beanId, weightDiff);
+        this.adjustBeanWeight(roast.beanId, weightDiff, sync);
       }
       roasts[index] = processedRoast;
     } else {
       // Deduct bean weight on new roast
-      this.adjustBeanWeight(roast.beanId, -roast.greenWeight);
+      this.adjustBeanWeight(roast.beanId, -roast.greenWeight, sync);
       roasts.push(processedRoast);
 
       // Proactively create pending tastings for Day 7, Day 10, Day 14
@@ -460,20 +506,16 @@ export const DBService = {
 
     // Save Roast Steps
     this.saveRoastSteps(roast.id, steps);
-    persistCloudSync({
-      beans: this.getBeans(),
-      roasts,
-      steps: this.getAllRoastSteps(),
-    });
+    if (sync) void postCloudSync({ action: 'upsertRoast', roast: processedRoast, steps: this.getAllRoastSteps() });
 
     return processedRoast;
   },
 
-  deleteRoast(id: string): void {
+  deleteRoast(id: string, sync = true): void {
     // Return green weight to bean first
     const roast = this.getRoastById(id);
     if (roast) {
-      this.adjustBeanWeight(roast.beanId, roast.greenWeight);
+      this.adjustBeanWeight(roast.beanId, roast.greenWeight, sync);
     }
 
     const roasts = this.getRoasts().filter(r => r.id !== id);
@@ -486,12 +528,15 @@ export const DBService = {
     // Delete tastings
     const tastings = this.getTastings().filter(t => t.roastId !== id);
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
-    persistCloudSync({
-      beans: this.getBeans(),
-      roasts,
-      steps,
-      delete: { type: 'roast', id },
-    });
+    if (sync) void postCloudSync({ action: 'deleteRoast', id });
+  },
+
+  saveRoastToCloud(roast: Roast, steps: RoastStep[]): Promise<CloudSyncResult> {
+    return postCloudSync({ action: 'upsertRoast', roast, steps });
+  },
+
+  deleteRoastFromCloud(id: string): Promise<CloudSyncResult> {
+    return postCloudSync({ action: 'deleteRoast', id });
   },
 
   generateNextRoastId(): string {
@@ -505,11 +550,11 @@ export const DBService = {
     return `R${(max + 1).toString().padStart(4, '0')}`;
   },
 
-  adjustBeanWeight(beanId: string, amount: number): void {
+  adjustBeanWeight(beanId: string, amount: number, sync = true): void {
     const bean = this.getBeanById(beanId);
     if (bean) {
       bean.currentWeight = Math.max(0, bean.currentWeight + amount);
-      this.saveBean(bean);
+      this.saveBean(bean, sync);
     }
   },
 
@@ -653,21 +698,55 @@ export const DBService = {
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
   },
 
-  async syncFromCloud(): Promise<boolean> {
+  async syncFromCloud(): Promise<CloudSyncResult> {
+    const pending = getPendingSyncPayloads();
+    if (pending.length > 0) {
+      return {
+        ok: false,
+        pending: true,
+        error: '未同期の変更があります。Google Sheetsへの再送が成功するまでクラウド同期で上書きしません。',
+      };
+    }
+
     const snapshot = await fetchCloudSnapshot();
-    if (!snapshot) return false;
+    if (!snapshot.ok) return snapshot;
+    if (!('beans' in snapshot) || !('roasts' in snapshot) || !('steps' in snapshot)) {
+      return { ok: false, error: 'Google Sheetsから不完全なデータが返りました。' };
+    }
     saveLocalData(STORAGE_KEYS.BEANS, snapshot.beans);
     saveLocalData(STORAGE_KEYS.ROASTS, snapshot.roasts);
     saveLocalData(STORAGE_KEYS.STEPS, snapshot.steps);
-    return true;
+    return { ok: true };
   },
 
-  syncCurrentLocalData(): void {
-    persistCloudSync({
+  syncCurrentLocalData(): Promise<CloudSyncResult> {
+    return postCloudSync({
       beans: this.getBeans(),
       roasts: this.getRoasts(),
       steps: this.getAllRoastSteps(),
     });
+  },
+
+  getPendingSyncCount(): number {
+    return getPendingSyncPayloads().length;
+  },
+
+  async retryPendingSync(): Promise<CloudSyncResult> {
+    const pending = getPendingSyncPayloads();
+    if (pending.length === 0) return { ok: true };
+
+    const remaining: CloudSyncPayload[] = [];
+    for (const payload of pending) {
+      const result = await postCloudSync(payload);
+      if (!result.ok) {
+        remaining.push(payload);
+        savePendingSyncPayloads([...remaining, ...pending.slice(pending.indexOf(payload) + 1)]);
+        return result;
+      }
+    }
+
+    savePendingSyncPayloads([]);
+    return { ok: true };
   },
 
   // Export / Import

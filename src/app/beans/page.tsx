@@ -57,6 +57,8 @@ export default function BeansPage() {
   const [editingBean, setEditingBean] = useState<Bean | null>(null);
   const [form, setForm] = useState<BeanFormValues>(emptyForm());
   const [syncStatus, setSyncStatus] = useState('ローカル準備完了');
+  const [syncError, setSyncError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const loadLocalData = useCallback(() => {
     const allBeans = DBService.getBeans();
@@ -66,10 +68,17 @@ export default function BeansPage() {
   }, []);
 
   const syncFromCloud = useCallback(async () => {
-    const ok = await DBService.syncFromCloud();
-    if (ok) {
+    const result = await DBService.syncFromCloud();
+    if (result.ok) {
       loadLocalData();
+      setSyncError('');
       setSyncStatus(`同期済み ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`);
+    } else if (result.pending) {
+      setSyncStatus('未同期の変更があります');
+      setSyncError(result.error || 'Googleスプレッドシートへの保存待ちです。');
+    } else {
+      setSyncStatus('同期エラー');
+      setSyncError(result.error || 'Googleスプレッドシートからの読み込みに失敗しました。');
     }
   }, [loadLocalData]);
 
@@ -126,7 +135,7 @@ export default function BeansPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.name.trim() || !form.country.trim() || !form.purchaseDate || form.initialWeight <= 0) {
       alert('生豆名、生産国、購入日、内容量を入力してください。');
@@ -160,20 +169,56 @@ export default function BeansPage() {
       createdAt: editingBean?.createdAt || new Date().toISOString(),
     };
 
-    DBService.saveBean(bean);
+    setIsSaving(true);
+    setSyncError('');
+    DBService.saveBean(bean, false);
     loadLocalData();
     setSelectedBeanId(bean.id);
-    setIsModalOpen(false);
-    setEditingBean(null);
     setSyncStatus('保存しました。Google Sheetsへ同期中');
+
+    const result = await DBService.saveBeanToCloud(bean);
+    setIsSaving(false);
+
+    if (result.ok) {
+      setIsModalOpen(false);
+      setEditingBean(null);
+      setSyncStatus('Google Sheetsへ保存済み');
+      setSyncError('');
+      await syncFromCloud();
+      return;
+    }
+
+    setSyncStatus('保存失敗（ローカルには保持）');
+    setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
   };
 
-  const deleteBean = (bean: Bean) => {
+  const deleteBean = async (bean: Bean) => {
     if (!confirm(`${bean.name} を削除しますか？焙煎履歴は残ります。`)) return;
-    DBService.deleteBean(bean.id);
+    setSyncError('');
+    DBService.deleteBean(bean.id, false);
     loadLocalData();
     setSelectedBeanId(null);
     setSyncStatus('削除しました。Google Sheetsへ同期中');
+    const result = await DBService.deleteBeanFromCloud(bean.id);
+    if (result.ok) {
+      setSyncStatus('Google Sheetsから削除済み');
+    } else {
+      setSyncStatus('削除同期失敗（ローカルには反映済み）');
+      setSyncError(result.error || 'Googleスプレッドシートへの削除同期に失敗しました。');
+    }
+  };
+
+  const retryPendingSync = async () => {
+    setSyncStatus('未同期データを再送中');
+    const result = await DBService.retryPendingSync();
+    if (result.ok) {
+      setSyncError('');
+      setSyncStatus('未同期データを再送しました');
+      await syncFromCloud();
+    } else {
+      setSyncStatus('再送失敗');
+      setSyncError(result.error || 'Googleスプレッドシートへの再送に失敗しました。');
+    }
   };
 
   return (
@@ -185,6 +230,11 @@ export default function BeansPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden text-xs text-[#8E8E93] md:inline">{syncStatus}</span>
+          {DBService.getPendingSyncCount() > 0 && (
+            <button type="button" onClick={retryPendingSync} className="hidden rounded-lg border border-[#D09B6A]/40 px-3 py-2 text-xs font-semibold text-[#D09B6A] md:inline">
+              未同期を再送
+            </button>
+          )}
           <button
             type="button"
             onClick={openAddModal}
@@ -195,6 +245,12 @@ export default function BeansPage() {
           </button>
         </div>
       </header>
+
+      {syncError && (
+        <div className="border-b border-[#7F1D1D] bg-[#450A0A] px-4 py-3 text-sm text-red-100 md:px-6">
+          {syncError}
+        </div>
+      )}
 
       <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(320px,40%)_1fr]">
         <section className="border-r border-[#232326] bg-[#0B0B0C]">
@@ -365,7 +421,9 @@ export default function BeansPage() {
 
           <div className="flex justify-end gap-3 border-t border-[#232326] pt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg bg-[#1C1C1F] px-4 py-2 text-sm text-[#E4E4E7]">キャンセル</button>
-            <button type="submit" className="rounded-lg bg-[#D09B6A] px-4 py-2 text-sm font-bold text-[#0B0B0C]">保存</button>
+            <button type="submit" disabled={isSaving} className="rounded-lg bg-[#D09B6A] px-4 py-2 text-sm font-bold text-[#0B0B0C] disabled:cursor-not-allowed disabled:opacity-60">
+              {isSaving ? '保存中...' : '保存'}
+            </button>
           </div>
         </form>
       </Modal>
