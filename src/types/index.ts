@@ -1,4 +1,4 @@
-export interface Bean {
+﻿export interface Bean {
   id: string; // e.g. "B0001"
   name: string;
   country: string;
@@ -14,6 +14,7 @@ export interface Bean {
   purchasePrice: number;
   initialWeight: number; // in grams
   currentWeight: number; // in grams
+  weightLossPercentage: number; // expected roast loss percentage
   recommendedRoastDegree: string;
   notes: string;
   photoUrl?: string;
@@ -78,3 +79,4 @@ export interface Tasting {
   status: 'pending' | 'completed';
   createdAt: string;
 }
+
