@@ -1,25 +1,55 @@
-﻿import { NextRequest } from 'next/server';
-import { readSheetsSnapshot, writeSheetsSnapshot } from '@/lib/googleSheets';
+import { NextRequest } from 'next/server';
+import {
+  deleteBeanFromSheet,
+  deleteRoastFromSheet,
+  readSheetsSnapshot,
+  upsertBean,
+  upsertRoast,
+  writeSheetsSnapshot,
+} from '@/lib/googleSheets';
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+
+function errorResponse(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  console.error(message, error);
+  return Response.json({ ok: false, error: message }, { status: 500 });
+}
 
 export async function GET() {
   try {
     const snapshot = await readSheetsSnapshot();
-    return Response.json(snapshot);
+    return Response.json({ ok: true, ...snapshot });
   } catch (error) {
-    console.error(error);
-    return Response.json(
-      { error: error instanceof Error ? error.message : 'Failed to read Google Sheets.' },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to read Google Sheets.');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
+    const action = String(payload.action || '');
+
+    if (action === 'upsertBean') {
+      const bean = await upsertBean(payload.bean);
+      return Response.json({ ok: true, bean });
+    }
+
+    if (action === 'deleteBean') {
+      await deleteBeanFromSheet(String(payload.id || ''));
+      return Response.json({ ok: true });
+    }
+
+    if (action === 'upsertRoast') {
+      const roast = await upsertRoast(payload.roast, Array.isArray(payload.steps) ? payload.steps : []);
+      return Response.json({ ok: true, roast });
+    }
+
+    if (action === 'deleteRoast') {
+      await deleteRoastFromSheet(String(payload.id || ''));
+      return Response.json({ ok: true });
+    }
+
     await writeSheetsSnapshot({
       beans: Array.isArray(payload.beans) ? payload.beans : undefined,
       roasts: Array.isArray(payload.roasts) ? payload.roasts : undefined,
@@ -27,10 +57,6 @@ export async function POST(request: NextRequest) {
     });
     return Response.json({ ok: true });
   } catch (error) {
-    console.error(error);
-    return Response.json(
-      { error: error instanceof Error ? error.message : 'Failed to write Google Sheets.' },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to write Google Sheets.');
   }
 }

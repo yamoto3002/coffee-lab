@@ -44,6 +44,8 @@ function NewRoastContent() {
   const [pastRoasts, setPastRoasts] = useState<Roast[]>(() => DBService.getRoasts());
   const [tabMode, setTabMode] = useState<TabMode>('live');
   const [syncStatus, setSyncStatus] = useState('ローカル準備完了');
+  const [syncError, setSyncError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [roastId] = useState(() => DBService.generateNextRoastId());
   const [beanId, setBeanId] = useState(() => preselectedBeanId || DBService.getBeans()[0]?.id || '');
@@ -97,16 +99,28 @@ function NewRoastContent() {
   }, [preselectedBeanId]);
 
   useEffect(() => {
-    DBService.syncFromCloud().then(ok => {
-      if (ok) {
+    DBService.syncFromCloud().then(result => {
+      if (result.ok) {
         loadLocalData();
+        setSyncError('');
         setSyncStatus('Google Sheetsから同期済み');
+      } else if (result.pending) {
+        setSyncStatus('未同期の変更があります');
+        setSyncError(result.error || 'Googleスプレッドシートへの保存待ちです。');
+      } else {
+        setSyncStatus('同期エラー');
+        setSyncError(result.error || 'Googleスプレッドシートからの読み込みに失敗しました。');
       }
     });
     const timer = window.setInterval(() => {
       if (!isRunning) {
-        DBService.syncFromCloud().then(ok => {
-          if (ok) loadLocalData();
+        DBService.syncFromCloud().then(result => {
+          if (result.ok) {
+            loadLocalData();
+            setSyncError('');
+          } else if (!result.pending) {
+            setSyncError(result.error || 'Googleスプレッドシートからの読み込みに失敗しました。');
+          }
         });
       }
     }, 7000);
@@ -157,21 +171,18 @@ function NewRoastContent() {
 
     if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
     syncTimerRef.current = window.setTimeout(() => {
-      const existingRoasts = DBService.getRoasts().filter(roast => roast.id !== roastId);
-      const allRoasts = [...existingRoasts, latestDraftRef.current!];
-      const allSteps = [
-        ...DBService.getAllRoastSteps().filter(step => step.roastId !== roastId),
-        ...latestStepsRef.current.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId })),
-      ];
-
-      fetch('/api/sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beans: DBService.getBeans(), roasts: allRoasts, steps: allSteps }),
-        keepalive: true,
-      })
-        .then(response => setSyncStatus(response.ok ? 'Google Sheetsへ同期済み' : '同期待機中（ローカル保存済み）'))
-        .catch(() => setSyncStatus('同期待機中（ローカル保存済み）'));
+      const draft = latestDraftRef.current;
+      if (!draft) return;
+      const currentRoastSteps = latestStepsRef.current.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId }));
+      DBService.saveRoastToCloud(draft, currentRoastSteps).then(result => {
+        if (result.ok) {
+          setSyncStatus('Google Sheetsへ同期済み');
+          setSyncError('');
+        } else {
+          setSyncStatus('同期待機中（ローカル保持）');
+          setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
+        }
+      });
     }, 150);
   }, [beanId, buildDraftRoast, roastId]);
 
@@ -278,7 +289,7 @@ function NewRoastContent() {
     setGhostSteps(DBService.getRoastSteps(id).map(step => ({ time: step.time, heat: step.heat, air: step.air, memo: step.memo || '' })));
   };
 
-  const saveRoast = () => {
+  const saveRoast = async () => {
     if (!beanId) {
       alert('使用する生豆を選択してください。');
       return;
@@ -287,8 +298,32 @@ function NewRoastContent() {
 
     const finalRoast = buildDraftRoast();
     const finalSteps: RoastStep[] = timeline.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId }));
-    DBService.saveRoast(finalRoast, finalSteps);
-    router.push(`/roasts/${roastId}`);
+    setIsSaving(true);
+    setSyncError('');
+    DBService.saveRoast(finalRoast, finalSteps, false);
+    const result = await DBService.saveRoastToCloud(finalRoast, finalSteps);
+    setIsSaving(false);
+
+    if (result.ok) {
+      setSyncStatus('Google Sheetsへ保存済み');
+      router.push(`/roasts/${roastId}`);
+      return;
+    }
+
+    setSyncStatus('保存失敗（ローカルには保持）');
+    setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
+  };
+
+  const retryPendingSync = async () => {
+    setSyncStatus('未同期データを再送中');
+    const result = await DBService.retryPendingSync();
+    if (result.ok) {
+      setSyncStatus('未同期データを再送しました');
+      setSyncError('');
+    } else {
+      setSyncStatus('再送失敗');
+      setSyncError(result.error || 'Googleスプレッドシートへの再送に失敗しました。');
+    }
   };
 
   const chartData = useMemo(() => {
@@ -313,11 +348,24 @@ function NewRoastContent() {
             <p className="text-xs text-[#8E8E93]">{roastId} / {syncStatus}</p>
           </div>
         </div>
-        <button onClick={saveRoast} className="flex items-center gap-2 rounded-xl bg-[#D09B6A] px-4 py-2 text-sm font-bold text-[#0B0B0C] active:scale-95">
+        <div className="flex items-center gap-2">
+          {DBService.getPendingSyncCount() > 0 && (
+            <button onClick={retryPendingSync} className="hidden rounded-xl border border-[#D09B6A]/40 px-3 py-2 text-xs font-bold text-[#D09B6A] md:block">
+              未同期を再送
+            </button>
+          )}
+        <button onClick={saveRoast} disabled={isSaving} className="flex items-center gap-2 rounded-xl bg-[#D09B6A] px-4 py-2 text-sm font-bold text-[#0B0B0C] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60">
           <Save className="h-4 w-4" />
-          保存
+          {isSaving ? '保存中' : '保存'}
         </button>
+        </div>
       </header>
+
+      {syncError && (
+        <div className="border-b border-[#7F1D1D] bg-[#450A0A] px-4 py-3 text-sm text-red-100 md:px-6">
+          {syncError}
+        </div>
+      )}
 
       <div className="sticky top-[73px] z-10 grid grid-cols-2 border-b border-[#232326] bg-[#0E0E10]/95 backdrop-blur">
         <button onClick={() => setTabMode('live')} className={`flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-b-2 border-[#D09B6A] text-[#D09B6A]' : 'text-[#8E8E93]'}`}>

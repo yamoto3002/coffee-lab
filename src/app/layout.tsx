@@ -1,21 +1,11 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+﻿import type { Metadata } from "next";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
-  title: "Coffee Lab - 焙煎研究データベース",
-  description: "再現性と分析性を極限まで高めた、本格コーヒー焙煎データベース",
+  title: "Coffee Lab - 焙煎記録データベース",
+  description: "コーヒーの生豆、焙煎、テイスティングを記録するデータベース",
 };
 
 export const viewport = {
@@ -32,7 +22,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className="h-full antialiased dark"
     >
       <body className="min-h-full bg-[#0B0B0C] text-[#F4F4F6] font-sans overflow-x-hidden">
         {/* Coffee-themed subtle background overlay */}
@@ -57,3 +47,4 @@ export default function RootLayout({
     </html>
   );
 }
+
