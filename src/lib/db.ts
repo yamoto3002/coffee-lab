@@ -1,4 +1,4 @@
-import { Bean, Roast, RoastStep, Tasting, RoastStatus } from '../types';
+﻿import { Bean, Roast, RoastStep, Tasting, RoastStatus } from '../types';
 
 // --- Time Helper Functions ---
 
@@ -64,6 +64,7 @@ const SEED_BEANS: Bean[] = [
     purchasePrice: 2800,
     initialWeight: 1000,
     currentWeight: 600,
+    weightLossPercentage: 15,
     recommendedRoastDegree: 'Medium-Light',
     notes: 'Very clean washed peaberry with citrus notes, black tea finish and medium body.',
     photoUrl: '',
@@ -85,6 +86,7 @@ const SEED_BEANS: Bean[] = [
     purchasePrice: 3800,
     initialWeight: 500,
     currentWeight: 350,
+    weightLossPercentage: 14.5,
     recommendedRoastDegree: 'Light',
     notes: 'Intense jasmine aroma, blueberry flavor, and peach-like sweetness. High acidity.',
     photoUrl: '',
@@ -284,12 +286,63 @@ function saveLocalData<T>(key: string, data: T[]): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
+function normalizeBean(bean: Bean): Bean {
+  return {
+    ...bean,
+    weightLossPercentage: typeof bean.weightLossPercentage === 'number' ? bean.weightLossPercentage : 15,
+  };
+}
+
+function persistCloudSync(payload: { beans?: Bean[]; roasts?: Roast[]; steps?: RoastStep[]; delete?: { type: 'bean' | 'roast'; id: string } }): void {
+  if (typeof window === 'undefined') return;
+
+  const body = JSON.stringify(payload);
+  const url = '/api/sheets';
+
+  try {
+    if ('sendBeacon' in navigator) {
+      const blob = new Blob([body], { type: 'application/json' });
+      if (navigator.sendBeacon(url, blob)) return;
+    }
+  } catch (error) {
+    console.warn('sendBeacon sync failed, falling back to fetch.', error);
+  }
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true,
+  }).catch((error) => {
+    console.warn('Background Google Sheets sync failed.', error);
+  });
+}
+
+async function fetchCloudSnapshot(): Promise<{ beans: Bean[]; roasts: Roast[]; steps: RoastStep[] } | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const response = await fetch('/api/sheets', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      beans: Array.isArray(data.beans) ? data.beans.map(normalizeBean) : [],
+      roasts: Array.isArray(data.roasts) ? data.roasts : [],
+      steps: Array.isArray(data.steps) ? data.steps : [],
+    };
+  } catch (error) {
+    console.warn('Google Sheets snapshot fetch failed.', error);
+    return null;
+  }
+}
+
 // --- DB Service Methods ---
 
 export const DBService = {
   // Beans CRUD
   getBeans(): Bean[] {
-    return getLocalData<Bean>(STORAGE_KEYS.BEANS, SEED_BEANS);
+    const beans = getLocalData<Bean>(STORAGE_KEYS.BEANS, SEED_BEANS).map(normalizeBean);
+    saveLocalData(STORAGE_KEYS.BEANS, beans);
+    return beans;
   },
 
   getBeanById(id: string): Bean | undefined {
@@ -297,20 +350,23 @@ export const DBService = {
   },
 
   saveBean(bean: Bean): Bean {
+    const normalizedBean = normalizeBean(bean);
     const beans = this.getBeans();
-    const index = beans.findIndex(b => b.id === bean.id);
+    const index = beans.findIndex(b => b.id === normalizedBean.id);
     if (index >= 0) {
-      beans[index] = { ...bean };
+      beans[index] = { ...normalizedBean };
     } else {
-      beans.push({ ...bean });
+      beans.push({ ...normalizedBean });
     }
     saveLocalData(STORAGE_KEYS.BEANS, beans);
-    return bean;
+    persistCloudSync({ beans });
+    return normalizedBean;
   },
 
   deleteBean(id: string): void {
     const beans = this.getBeans().filter(b => b.id !== id);
     saveLocalData(STORAGE_KEYS.BEANS, beans);
+    persistCloudSync({ beans, delete: { type: 'bean', id } });
     // Cascade delete can be done, but we'll preserve roasts for history or let user know
   },
 
@@ -404,6 +460,11 @@ export const DBService = {
 
     // Save Roast Steps
     this.saveRoastSteps(roast.id, steps);
+    persistCloudSync({
+      beans: this.getBeans(),
+      roasts,
+      steps: this.getAllRoastSteps(),
+    });
 
     return processedRoast;
   },
@@ -425,6 +486,12 @@ export const DBService = {
     // Delete tastings
     const tastings = this.getTastings().filter(t => t.roastId !== id);
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
+    persistCloudSync({
+      beans: this.getBeans(),
+      roasts,
+      steps,
+      delete: { type: 'roast', id },
+    });
   },
 
   generateNextRoastId(): string {
@@ -586,6 +653,23 @@ export const DBService = {
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
   },
 
+  async syncFromCloud(): Promise<boolean> {
+    const snapshot = await fetchCloudSnapshot();
+    if (!snapshot) return false;
+    saveLocalData(STORAGE_KEYS.BEANS, snapshot.beans);
+    saveLocalData(STORAGE_KEYS.ROASTS, snapshot.roasts);
+    saveLocalData(STORAGE_KEYS.STEPS, snapshot.steps);
+    return true;
+  },
+
+  syncCurrentLocalData(): void {
+    persistCloudSync({
+      beans: this.getBeans(),
+      roasts: this.getRoasts(),
+      steps: this.getAllRoastSteps(),
+    });
+  },
+
   // Export / Import
   exportData(): string {
     const data = {
@@ -619,3 +703,4 @@ export const DBService = {
     }
   }
 };
+
