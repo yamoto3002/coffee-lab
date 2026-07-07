@@ -1,16 +1,14 @@
-﻿import { Bean, Roast, RoastStep, Tasting, RoastStatus } from '../types';
-
-// --- Time Helper Functions ---
+import { AppSettings, Bean, Roast, RoastStatus, RoastStep, Tasting } from '../types';
 
 export function timeToSeconds(timeStr: string): number {
   if (!timeStr || !timeStr.includes(':')) return 0;
   const [mins, secs] = timeStr.split(':').map(Number);
-  if (isNaN(mins) || isNaN(secs)) return 0;
+  if (!Number.isFinite(mins) || !Number.isFinite(secs)) return 0;
   return mins * 60 + secs;
 }
 
 export function secondsToTime(secs: number): string {
-  if (secs < 0 || isNaN(secs)) return '00:00';
+  if (secs < 0 || !Number.isFinite(secs)) return '00:00';
   const mins = Math.floor(secs / 60);
   const remainingSecs = Math.floor(secs % 60);
   return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
@@ -27,244 +25,51 @@ export function calculateDevRatio(firstCrack: string, drop: string): number {
   const fcSecs = timeToSeconds(firstCrack);
   const dropSecs = timeToSeconds(drop);
   if (fcSecs <= 0 || dropSecs <= fcSecs) return 0;
-  const devSecs = dropSecs - fcSecs;
-  return Math.round((devSecs / dropSecs) * 1000) / 10; // e.g. 15.5
+  return Math.round(((dropSecs - fcSecs) / dropSecs) * 1000) / 10;
 }
 
 export function calculateLossRatio(green: number, roasted: number): number {
   if (green <= 0 || roasted <= 0 || green < roasted) return 0;
-  return Math.round(((green - roasted) / green) * 1000) / 10; // e.g. 14.2
+  return Math.round(((green - roasted) / green) * 1000) / 10;
 }
 
-export function getAgingDays(roastDateStr: string): number {
+export function getAgingDays(dateStr: string): number {
+  if (!dateStr) return 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const roastDate = new Date(roastDateStr);
-  roastDate.setHours(0, 0, 0, 0);
-  const diffTime = today.getTime() - roastDate.getTime();
-  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 0;
+  date.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - date.getTime()) / 86400000);
 }
 
-// --- Seed Data ---
-
-const SEED_BEANS: Bean[] = [
-  {
-    id: 'B0001',
-    name: 'Sigri Estate Peaberry',
-    country: 'Papua New Guinea',
-    region: 'Wahgi Valley',
-    farm: 'Sigri Estate',
-    producer: 'Sigri Group',
-    altitude: 1600,
-    variety: 'Typica',
-    process: 'Washed',
-    cropYear: '2025',
-    purchaseShop: 'Green Coffee Traders',
-    purchaseDate: '2026-05-10',
-    purchasePrice: 2800,
-    initialWeight: 1000,
-    currentWeight: 600,
-    weightLossPercentage: 15,
-    recommendedRoastDegree: 'Medium-Light',
-    notes: 'Very clean washed peaberry with citrus notes, black tea finish and medium body.',
-    photoUrl: '',
-    createdAt: '2026-05-10T10:00:00Z'
-  },
-  {
-    id: 'B0002',
-    name: 'Chelbesa G1',
-    country: 'Ethiopia',
-    region: 'Yirgacheffe',
-    farm: 'Chelbesa Washing Station',
-    producer: 'Local Smallholders',
-    altitude: 2100,
-    variety: 'Kurume / Dega',
-    process: 'Natural',
-    cropYear: '2025',
-    purchaseShop: 'TYPICA',
-    purchaseDate: '2026-06-01',
-    purchasePrice: 3800,
-    initialWeight: 500,
-    currentWeight: 350,
-    weightLossPercentage: 14.5,
-    recommendedRoastDegree: 'Light',
-    notes: 'Intense jasmine aroma, blueberry flavor, and peach-like sweetness. High acidity.',
-    photoUrl: '',
-    createdAt: '2026-06-01T12:00:00Z'
-  }
-];
-
-// Helper to get formatted dates relative to today
-function getRelativeDateStr(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().split('T')[0];
+export function getYearsSince(year: string): number | null {
+  const value = Number.parseInt(year, 10);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, new Date().getFullYear() - value);
 }
-
-const SEED_ROASTS: Roast[] = [
-  {
-    id: 'R0001',
-    beanId: 'B0001',
-    roastDate: getRelativeDateStr(8), // 8 days ago (Day 7 tasting was yesterday)
-    greenWeight: 200,
-    roastedWeight: 171.6,
-    yellowTime: '04:30',
-    firstCrackTime: '08:15',
-    dropTime: '09:48',
-    developmentTime: '01:33',
-    developmentRatio: 15.8,
-    lossRatio: 14.2,
-    status: 'waiting_day10', // completed Day 7, waiting for Day 10
-    notes: 'Targeting a balanced profile. Yellow phase hit at 4:30. Crack was gentle. Dropped 1min 33s after crack.',
-    createdAt: new Date(Date.now() - 8 * 86400000).toISOString()
-  },
-  {
-    id: 'R0002',
-    beanId: 'B0001',
-    roastDate: getRelativeDateStr(3), // 3 days ago, waiting for Day 7
-    greenWeight: 200,
-    roastedWeight: 172.4,
-    yellowTime: '04:20',
-    firstCrackTime: '08:00',
-    dropTime: '09:30',
-    developmentTime: '01:30',
-    developmentRatio: 15.8,
-    lossRatio: 13.8,
-    status: 'waiting_day7',
-    notes: 'Slightly shorter drying phase. Smells very sweet.',
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString()
-  },
-  {
-    id: 'R0003',
-    beanId: 'B0002',
-    roastDate: getRelativeDateStr(12), // 12 days ago, Day 7 and Day 10 completed, waiting for Day 14
-    greenWeight: 150,
-    roastedWeight: 128.5,
-    yellowTime: '04:10',
-    firstCrackTime: '07:45',
-    dropTime: '09:00',
-    developmentTime: '01:15',
-    developmentRatio: 13.9,
-    lossRatio: 14.3,
-    status: 'waiting_day14',
-    notes: 'Very fast light roast for Yirgacheffe to preserve acidity and floral aromas.',
-    createdAt: new Date(Date.now() - 12 * 86400000).toISOString()
-  }
-];
-
-const SEED_ROAST_STEPS: RoastStep[] = [
-  // R0001 steps
-  { id: 's1', roastId: 'R0001', time: '00:00', heat: 7, air: 2, memo: 'Charge' },
-  { id: 's2', roastId: 'R0001', time: '02:00', heat: 8, air: 2, memo: 'Increase heat' },
-  { id: 's3', roastId: 'R0001', time: '04:30', heat: 6, air: 3, memo: 'Yellowing' },
-  { id: 's4', roastId: 'R0001', time: '06:00', heat: 5, air: 4, memo: 'Decrease heat' },
-  { id: 's5', roastId: 'R0001', time: '08:15', heat: 4, air: 5, memo: 'First Crack' },
-  { id: 's6', roastId: 'R0001', time: '09:00', heat: 3, air: 6, memo: 'Lower heat' },
-  { id: 's7', roastId: 'R0001', time: '09:48', heat: 1, air: 8, memo: 'Drop' },
-
-  // R0002 steps
-  { id: 's8', roastId: 'R0002', time: '00:00', heat: 8, air: 2, memo: 'High heat charge' },
-  { id: 's9', roastId: 'R0002', time: '04:20', heat: 6, air: 3, memo: 'Yellow' },
-  { id: 's10', roastId: 'R0002', time: '07:00', heat: 5, air: 4 },
-  { id: 's11', roastId: 'R0002', time: '08:00', heat: 3, air: 6, memo: '1st Crack' },
-  { id: 's12', roastId: 'R0002', time: '09:30', heat: 1, air: 8, memo: 'Drop' },
-
-  // R0003 steps
-  { id: 's13', roastId: 'R0003', time: '00:00', heat: 8, air: 3, memo: 'Ethiopia light profile' },
-  { id: 's14', roastId: 'R0003', time: '04:10', heat: 6, air: 4, memo: 'Yellow' },
-  { id: 's15', roastId: 'R0003', time: '06:30', heat: 5, air: 5 },
-  { id: 's16', roastId: 'R0003', time: '07:45', heat: 3, air: 7, memo: '1st Crack' },
-  { id: 's17', roastId: 'R0003', time: '09:00', heat: 1, air: 8, memo: 'Drop' }
-];
-
-const SEED_TASTINGS: Tasting[] = [
-  // R0001 Tastings: Day 7 is completed
-  {
-    id: 't1',
-    roastId: 'R0001',
-    tastingDay: 7,
-    tastingDate: getRelativeDateStr(1), // Completed yesterday
-    fragrance: 8.0,
-    aroma: 8.2,
-    flavor: 8.0,
-    sweetness: 8.5,
-    acidityIntensity: 7.5,
-    acidityQuality: 8.0,
-    body: 7.5,
-    aftertaste: 7.8,
-    balance: 8.0,
-    cleanCup: 8.5,
-    overall: 8.0,
-    score: 84.5,
-    recommendationRating: 4,
-    flavors: ['Fruit', 'Citrus', 'Orange', 'Chocolate', 'Brown Sugar'],
-    negatives: [],
-    improvements: 'Body is a bit light. Next time increase heat during middle phase slightly or extend development time by 10s.',
-    photos: [],
-    status: 'completed',
-    createdAt: new Date(Date.now() - 1 * 86400000).toISOString()
-  },
-  // R0003 Tastings: Day 7 and Day 10 completed
-  {
-    id: 't2',
-    roastId: 'R0003',
-    tastingDay: 7,
-    tastingDate: getRelativeDateStr(5),
-    fragrance: 8.5,
-    aroma: 8.8,
-    flavor: 8.5,
-    sweetness: 8.0,
-    acidityIntensity: 8.5,
-    acidityQuality: 8.0,
-    body: 7.0,
-    aftertaste: 8.0,
-    balance: 8.2,
-    cleanCup: 9.0,
-    overall: 8.5,
-    score: 87.0,
-    recommendationRating: 4,
-    flavors: ['Fruit', 'Berry', 'Blueberry', 'Floral', 'Jasmine', 'Citrus'],
-    negatives: [],
-    improvements: 'Very bright and complex. Day 7 acid is intense. Let\'s see how it mellows by Day 10.',
-    photos: [],
-    status: 'completed',
-    createdAt: new Date(Date.now() - 5 * 86400000).toISOString()
-  },
-  {
-    id: 't3',
-    roastId: 'R0003',
-    tastingDay: 10,
-    tastingDate: getRelativeDateStr(2),
-    fragrance: 8.8,
-    aroma: 9.0,
-    flavor: 8.8,
-    sweetness: 8.5,
-    acidityIntensity: 8.0,
-    acidityQuality: 8.8,
-    body: 7.2,
-    aftertaste: 8.5,
-    balance: 8.8,
-    cleanCup: 9.0,
-    overall: 9.0,
-    score: 89.6, // overall high score
-    recommendationRating: 5,
-    flavors: ['Fruit', 'Berry', 'Blueberry', 'Floral', 'Jasmine', 'Honey', 'Peach'],
-    negatives: [],
-    improvements: 'Exceptional balance on Day 10. Blueberry note is very prominent. Drop time was perfect.',
-    photos: [],
-    status: 'completed',
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString()
-  }
-];
-
-// --- Storage API ---
 
 const STORAGE_KEYS = {
   BEANS: 'coffeelab_beans',
   ROASTS: 'coffeelab_roasts',
   STEPS: 'coffeelab_steps',
   TASTINGS: 'coffeelab_tastings',
-  PENDING_SYNC: 'coffeelab_pending_sync'
+  PENDING_SYNC: 'coffeelab_pending_sync',
+  SETTINGS: 'coffeelab_settings',
+  LAST_MUTATION: 'coffeelab_last_local_mutation',
+  LAST_SYNC: 'coffeelab_last_cloud_sync',
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  displayMode: 'detail',
+  showBeanDetails: true,
+  showCropYear: true,
+  showPurchaseAge: true,
+  showProcess: true,
+  showStock: true,
+  showAnalysisCards: true,
+  showHomeSuggestions: true,
+  showLiveRoastDetails: true,
 };
 
 export type CloudSyncResult = {
@@ -274,7 +79,7 @@ export type CloudSyncResult = {
 };
 
 type CloudSyncPayload = {
-  action?: 'upsertBean' | 'deleteBean' | 'upsertRoast' | 'deleteRoast';
+  action?: 'upsertBean' | 'deleteBean' | 'upsertRoast' | 'deleteRoast' | 'resetAll';
   bean?: Bean;
   roast?: Roast;
   id?: string;
@@ -283,18 +88,16 @@ type CloudSyncPayload = {
   steps?: RoastStep[];
 };
 
-function getLocalData<T>(key: string, seed: T[]): T[] {
-  if (typeof window === 'undefined') return seed;
-  const data = localStorage.getItem(key);
-  if (!data) {
-    localStorage.setItem(key, JSON.stringify(seed));
-    return seed;
-  }
+function getLocalData<T>(key: string, fallback: T[]): T[] {
+  if (typeof window === 'undefined') return fallback;
+  const raw = localStorage.getItem(key);
+  if (!raw) return fallback;
   try {
-    return JSON.parse(data);
-  } catch (e) {
-    console.error('Failed to parse storage key: ' + key, e);
-    return seed;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch (error) {
+    console.error('Failed to parse localStorage key: ' + key, error);
+    return fallback;
   }
 }
 
@@ -303,11 +106,69 @@ function saveLocalData<T>(key: string, data: T[]): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-function normalizeBean(bean: Bean): Bean {
+function markLocalMutation(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.LAST_MUTATION, String(Date.now()));
+}
+
+function getTimestamp(key: string): number {
+  if (typeof window === 'undefined') return 0;
+  return Number(localStorage.getItem(key) || 0) || 0;
+}
+
+function normalizeBean(bean: Partial<Bean>): Bean {
+  const initialWeight = toNumber(bean.initialWeight, toNumber((bean as { stockWeight?: unknown }).stockWeight));
+  const currentWeight = toNumber(bean.currentWeight, toNumber((bean as { stockWeight?: unknown }).stockWeight, initialWeight));
   return {
-    ...bean,
-    weightLossPercentage: typeof bean.weightLossPercentage === 'number' ? bean.weightLossPercentage : 15,
+    id: String(bean.id || ''),
+    name: String(bean.name || ''),
+    country: String(bean.country || ''),
+    region: String(bean.region || ''),
+    farm: String(bean.farm || ''),
+    producer: String(bean.producer || ''),
+    altitude: toNumber(bean.altitude),
+    variety: String(bean.variety || ''),
+    process: String(bean.process || 'Washed'),
+    cropYear: String(bean.cropYear || ''),
+    purchaseShop: String(bean.purchaseShop || ''),
+    purchaseDate: String(bean.purchaseDate || ''),
+    purchasePrice: toNumber(bean.purchasePrice),
+    initialWeight,
+    currentWeight,
+    weightLossPercentage: toNumber(bean.weightLossPercentage, 15),
+    notes: String(bean.notes || ''),
+    photoUrl: bean.photoUrl || '',
+    createdAt: String(bean.createdAt || new Date().toISOString()),
+    updatedAt: bean.updatedAt,
   };
+}
+
+function normalizeRoast(roast: Partial<Roast>): Roast {
+  const greenWeight = toNumber(roast.greenWeight, toNumber((roast as { inputWeight?: unknown }).inputWeight));
+  const roastedWeight = toNumber(roast.roastedWeight, toNumber((roast as { expectedOutputWeight?: unknown }).expectedOutputWeight));
+  const firstCrackTime = String(roast.firstCrackTime || '');
+  const dropTime = String(roast.dropTime || '');
+  return {
+    id: String(roast.id || ''),
+    beanId: String(roast.beanId || ''),
+    roastDate: String(roast.roastDate || ''),
+    greenWeight,
+    roastedWeight,
+    yellowTime: String(roast.yellowTime || ''),
+    firstCrackTime,
+    dropTime,
+    developmentTime: String(roast.developmentTime || calculateDevTime(firstCrackTime, dropTime)),
+    developmentRatio: toNumber(roast.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)),
+    lossRatio: toNumber(roast.lossRatio, calculateLossRatio(greenWeight, roastedWeight)),
+    status: (roast.status || 'waiting_day7') as RoastStatus,
+    notes: String(roast.notes || ''),
+    createdAt: String(roast.createdAt || new Date().toISOString()),
+  };
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
 function getPendingSyncPayloads(): CloudSyncPayload[] {
@@ -325,14 +186,14 @@ function enqueuePendingSync(payload: CloudSyncPayload): void {
     if (payload.action === 'deleteBean' && item.action === 'deleteBean') return item.id !== payload.id;
     if (payload.action === 'upsertRoast' && item.action === 'upsertRoast') return item.roast?.id !== payload.roast?.id;
     if (payload.action === 'deleteRoast' && item.action === 'deleteRoast') return item.id !== payload.id;
+    if (payload.action === 'resetAll' && item.action === 'resetAll') return false;
     return true;
   });
   savePendingSyncPayloads([...deduped, payload]);
 }
 
-async function postCloudSync(payload: CloudSyncPayload): Promise<CloudSyncResult> {
+async function postCloudSync(payload: CloudSyncPayload, queueOnFail = true): Promise<CloudSyncResult> {
   if (typeof window === 'undefined') return { ok: false, error: 'Browser environment is required.' };
-
   try {
     const response = await fetch('/api/sheets', {
       method: 'POST',
@@ -348,8 +209,8 @@ async function postCloudSync(payload: CloudSyncPayload): Promise<CloudSyncResult
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Google Sheets sync failed.';
     console.warn('Background Google Sheets sync failed.', error);
-    enqueuePendingSync(payload);
-    return { ok: false, error: message, pending: true };
+    if (queueOnFail) enqueuePendingSync(payload);
+    return { ok: false, error: message, pending: queueOnFail };
   }
 }
 
@@ -363,9 +224,9 @@ async function fetchCloudSnapshot(): Promise<({ beans: Bean[]; roasts: Roast[]; 
     }
     return {
       ok: true,
-      beans: Array.isArray(data.beans) ? data.beans.map(normalizeBean) : [],
-      roasts: Array.isArray(data.roasts) ? data.roasts : [],
-      steps: Array.isArray(data.steps) ? data.steps : [],
+      beans: Array.isArray(data.beans) ? data.beans.map((item: unknown) => normalizeBean(item as Partial<Bean>)).filter((bean: Bean) => bean.id) : [],
+      roasts: Array.isArray(data.roasts) ? data.roasts.map((item: unknown) => normalizeRoast(item as Partial<Roast>)).filter((roast: Roast) => roast.id) : [],
+      steps: Array.isArray(data.steps) ? (data.steps as RoastStep[]) : [],
     };
   } catch (error) {
     console.warn('Google Sheets snapshot fetch failed.', error);
@@ -373,39 +234,44 @@ async function fetchCloudSnapshot(): Promise<({ beans: Bean[]; roasts: Roast[]; 
   }
 }
 
-// --- DB Service Methods ---
+function recalculateRoastStatuses(roasts: Roast[], tastings: Tasting[]): Roast[] {
+  return roasts.map(roast => {
+    const completed = tastings.filter(t => t.roastId === roast.id && t.status === 'completed');
+    const hasD7 = completed.some(t => t.tastingDay === 7);
+    const hasD10 = completed.some(t => t.tastingDay === 10);
+    const hasD14 = completed.some(t => t.tastingDay === 14);
+    const status: RoastStatus = hasD14 ? 'completed' : hasD10 ? 'waiting_day14' : hasD7 ? 'waiting_day10' : 'waiting_day7';
+    return roast.status === status ? roast : { ...roast, status };
+  });
+}
 
 export const DBService = {
-  // Beans CRUD
   getBeans(): Bean[] {
-    const beans = getLocalData<Bean>(STORAGE_KEYS.BEANS, SEED_BEANS).map(normalizeBean);
+    const beans = getLocalData<Bean>(STORAGE_KEYS.BEANS, []).map(normalizeBean);
     saveLocalData(STORAGE_KEYS.BEANS, beans);
     return beans;
   },
 
   getBeanById(id: string): Bean | undefined {
-    return this.getBeans().find(b => b.id === id);
+    return this.getBeans().find(bean => bean.id === id);
   },
 
   saveBean(bean: Bean, sync = true): Bean {
-    const normalizedBean = normalizeBean(bean);
+    const normalized = normalizeBean({ ...bean, updatedAt: new Date().toISOString() });
     const beans = this.getBeans();
-    const index = beans.findIndex(b => b.id === normalizedBean.id);
-    if (index >= 0) {
-      beans[index] = { ...normalizedBean };
-    } else {
-      beans.push({ ...normalizedBean });
-    }
+    const index = beans.findIndex(item => item.id === normalized.id);
+    if (index >= 0) beans[index] = normalized;
+    else beans.push(normalized);
     saveLocalData(STORAGE_KEYS.BEANS, beans);
-    if (sync) void postCloudSync({ action: 'upsertBean', bean: normalizedBean });
-    return normalizedBean;
+    markLocalMutation();
+    if (sync) void postCloudSync({ action: 'upsertBean', bean: normalized });
+    return normalized;
   },
 
   deleteBean(id: string, sync = true): void {
-    const beans = this.getBeans().filter(b => b.id !== id);
-    saveLocalData(STORAGE_KEYS.BEANS, beans);
+    saveLocalData(STORAGE_KEYS.BEANS, this.getBeans().filter(bean => bean.id !== id));
+    markLocalMutation();
     if (sync) void postCloudSync({ action: 'deleteBean', id });
-    // Cascade delete can be done, but we'll preserve roasts for history or let user know
   },
 
   saveBeanToCloud(bean: Bean): Promise<CloudSyncResult> {
@@ -417,122 +283,66 @@ export const DBService = {
   },
 
   generateNextBeanId(): string {
-    const beans = this.getBeans();
-    if (beans.length === 0) return 'B0001';
-    const numericIds = beans.map(b => {
-      const num = parseInt(b.id.substring(1));
-      return isNaN(num) ? 0 : num;
-    });
-    const max = Math.max(...numericIds, 0);
+    const max = Math.max(...this.getBeans().map(bean => Number.parseInt(bean.id.slice(1), 10) || 0), 0);
     return `B${(max + 1).toString().padStart(4, '0')}`;
   },
 
-  // Roasts CRUD
   getRoasts(): Roast[] {
-    const roasts = getLocalData<Roast>(STORAGE_KEYS.ROASTS, SEED_ROASTS);
-    // Dynamically update status based on tastings
-    const tastings = this.getTastings();
-    let updated = false;
-
-    const updatedRoasts = roasts.map(roast => {
-      const roastTastings = tastings.filter(t => t.roastId === roast.id && t.status === 'completed');
-      let newStatus: RoastStatus = 'waiting_day7';
-      const hasD7 = roastTastings.some(t => t.tastingDay === 7);
-      const hasD10 = roastTastings.some(t => t.tastingDay === 10);
-      const hasD14 = roastTastings.some(t => t.tastingDay === 14);
-
-      if (hasD14) {
-        newStatus = 'completed';
-      } else if (hasD10) {
-        newStatus = 'waiting_day14';
-      } else if (hasD7) {
-        newStatus = 'waiting_day10';
-      } else {
-        newStatus = 'waiting_day7';
-      }
-
-      if (roast.status !== newStatus) {
-        updated = true;
-        return { ...roast, status: newStatus };
-      }
-      return roast;
-    });
-
-    if (updated) {
-      saveLocalData(STORAGE_KEYS.ROASTS, updatedRoasts);
-      return updatedRoasts;
-    }
-    return roasts;
+    const roasts = getLocalData<Roast>(STORAGE_KEYS.ROASTS, []).map(normalizeRoast);
+    const updated = recalculateRoastStatuses(roasts, this.getTastings());
+    saveLocalData(STORAGE_KEYS.ROASTS, updated);
+    return updated;
   },
 
   getRoastById(id: string): Roast | undefined {
-    return this.getRoasts().find(r => r.id === id);
+    return this.getRoasts().find(roast => roast.id === id);
   },
 
   saveRoast(roast: Roast, steps: RoastStep[], sync = true): Roast {
     const roasts = this.getRoasts();
-    const index = roasts.findIndex(r => r.id === roast.id);
-    
-    // Auto-calculations
-    const devTime = calculateDevTime(roast.firstCrackTime, roast.dropTime);
-    const devRatio = calculateDevRatio(roast.firstCrackTime, roast.dropTime);
-    const lossRatio = calculateLossRatio(roast.greenWeight, roast.roastedWeight);
-    
-    const processedRoast: Roast = {
+    const index = roasts.findIndex(item => item.id === roast.id);
+    const processed = normalizeRoast({
       ...roast,
-      developmentTime: devTime,
-      developmentRatio: devRatio,
-      lossRatio: lossRatio
-    };
+      developmentTime: calculateDevTime(roast.firstCrackTime, roast.dropTime),
+      developmentRatio: calculateDevRatio(roast.firstCrackTime, roast.dropTime),
+      lossRatio: calculateLossRatio(roast.greenWeight, roast.roastedWeight),
+    });
 
     if (index >= 0) {
-      // Adjust bean weight if green weight changed
       const oldRoast = roasts[index];
-      const weightDiff = oldRoast.greenWeight - roast.greenWeight; // if green weight decreased, we give back stock. If increased, we deduct more.
-      if (weightDiff !== 0) {
-        this.adjustBeanWeight(roast.beanId, weightDiff, sync);
+      if (oldRoast.beanId === processed.beanId) {
+        const weightDiff = oldRoast.greenWeight - processed.greenWeight;
+        if (weightDiff !== 0) this.adjustBeanWeight(processed.beanId, weightDiff, sync);
+      } else {
+        this.adjustBeanWeight(oldRoast.beanId, oldRoast.greenWeight, sync);
+        this.adjustBeanWeight(processed.beanId, -processed.greenWeight, sync);
       }
-      roasts[index] = processedRoast;
+      roasts[index] = processed;
     } else {
-      // Deduct bean weight on new roast
-      this.adjustBeanWeight(roast.beanId, -roast.greenWeight, sync);
-      roasts.push(processedRoast);
-
-      // Proactively create pending tastings for Day 7, Day 10, Day 14
-      this.generatePendingTastingsForRoast(roast.id, roast.roastDate);
+      this.adjustBeanWeight(processed.beanId, -processed.greenWeight, sync);
+      roasts.push(processed);
+      this.generatePendingTastingsForRoast(processed.id, processed.roastDate);
     }
-    
+
     saveLocalData(STORAGE_KEYS.ROASTS, roasts);
-
-    // Save Roast Steps
-    this.saveRoastSteps(roast.id, steps);
-    if (sync) void postCloudSync({ action: 'upsertRoast', roast: processedRoast, steps: this.getAllRoastSteps() });
-
-    return processedRoast;
+    this.saveRoastSteps(processed.id, steps);
+    markLocalMutation();
+    if (sync) void postCloudSync({ action: 'upsertRoast', roast: processed, steps: this.getAllRoastSteps() });
+    return processed;
   },
 
   deleteRoast(id: string, sync = true): void {
-    // Return green weight to bean first
     const roast = this.getRoastById(id);
-    if (roast) {
-      this.adjustBeanWeight(roast.beanId, roast.greenWeight, sync);
-    }
-
-    const roasts = this.getRoasts().filter(r => r.id !== id);
-    saveLocalData(STORAGE_KEYS.ROASTS, roasts);
-
-    // Delete steps
-    const steps = this.getAllRoastSteps().filter(s => s.roastId !== id);
-    saveLocalData(STORAGE_KEYS.STEPS, steps);
-
-    // Delete tastings
-    const tastings = this.getTastings().filter(t => t.roastId !== id);
-    saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
+    if (roast) this.adjustBeanWeight(roast.beanId, roast.greenWeight, sync);
+    saveLocalData(STORAGE_KEYS.ROASTS, this.getRoasts().filter(item => item.id !== id));
+    saveLocalData(STORAGE_KEYS.STEPS, this.getAllRoastSteps().filter(step => step.roastId !== id));
+    saveLocalData(STORAGE_KEYS.TASTINGS, this.getTastings().filter(tasting => tasting.roastId !== id));
+    markLocalMutation();
     if (sync) void postCloudSync({ action: 'deleteRoast', id });
   },
 
   saveRoastToCloud(roast: Roast, steps: RoastStep[]): Promise<CloudSyncResult> {
-    return postCloudSync({ action: 'upsertRoast', roast, steps });
+    return postCloudSync({ action: 'upsertRoast', roast: normalizeRoast(roast), steps });
   },
 
   deleteRoastFromCloud(id: string): Promise<CloudSyncResult> {
@@ -540,133 +350,80 @@ export const DBService = {
   },
 
   generateNextRoastId(): string {
-    const roasts = this.getRoasts();
-    if (roasts.length === 0) return 'R0001';
-    const numericIds = roasts.map(r => {
-      const num = parseInt(r.id.substring(1));
-      return isNaN(num) ? 0 : num;
-    });
-    const max = Math.max(...numericIds, 0);
+    const max = Math.max(...this.getRoasts().map(roast => Number.parseInt(roast.id.slice(1), 10) || 0), 0);
     return `R${(max + 1).toString().padStart(4, '0')}`;
   },
 
   adjustBeanWeight(beanId: string, amount: number, sync = true): void {
     const bean = this.getBeanById(beanId);
-    if (bean) {
-      bean.currentWeight = Math.max(0, bean.currentWeight + amount);
-      this.saveBean(bean, sync);
-    }
+    if (!bean) return;
+    this.saveBean({ ...bean, currentWeight: Math.max(0, Math.round((bean.currentWeight + amount) * 10) / 10) }, sync);
   },
 
-  // Roast Steps
   getAllRoastSteps(): RoastStep[] {
-    return getLocalData<RoastStep>(STORAGE_KEYS.STEPS, SEED_ROAST_STEPS);
+    return getLocalData<RoastStep>(STORAGE_KEYS.STEPS, []);
   },
 
   getRoastSteps(roastId: string): RoastStep[] {
     return this.getAllRoastSteps()
-      .filter(s => s.roastId === roastId)
+      .filter(step => step.roastId === roastId)
       .sort((a, b) => timeToSeconds(a.time) - timeToSeconds(b.time));
   },
 
   saveRoastSteps(roastId: string, steps: RoastStep[]): void {
-    const allSteps = this.getAllRoastSteps().filter(s => s.roastId !== roastId);
-    // Assign proper IDs to new steps and add them
-    const updatedSteps = [
+    const allSteps = this.getAllRoastSteps().filter(step => step.roastId !== roastId);
+    const updated = [
       ...allSteps,
-      ...steps.map((s, idx) => ({
-        ...s,
-        id: s.id || `step_${roastId}_${Date.now()}_${idx}`,
-        roastId
-      }))
+      ...steps.map((step, index) => ({ ...step, id: step.id || `step_${roastId}_${Date.now()}_${index}`, roastId })),
     ];
-    saveLocalData(STORAGE_KEYS.STEPS, updatedSteps);
+    saveLocalData(STORAGE_KEYS.STEPS, updated);
   },
 
-  // Tastings CRUD
   getTastings(): Tasting[] {
-    return getLocalData<Tasting>(STORAGE_KEYS.TASTINGS, SEED_TASTINGS);
+    return getLocalData<Tasting>(STORAGE_KEYS.TASTINGS, []);
   },
 
   getTastingById(id: string): Tasting | undefined {
-    return this.getTastings().find(t => t.id === id);
+    return this.getTastings().find(tasting => tasting.id === id);
   },
 
   getTastingsForRoast(roastId: string): Tasting[] {
-    return this.getTastings().filter(t => t.roastId === roastId);
+    return this.getTastings().filter(tasting => tasting.roastId === roastId);
   },
 
   saveTasting(tasting: Tasting): Tasting {
-    const tastings = this.getTastings();
-    const index = tastings.findIndex(t => t.id === tasting.id);
-    
-    // Calculate total score based on coffee tasting parameters
-    const params = [
-      tasting.fragrance,
-      tasting.aroma,
-      tasting.flavor,
-      tasting.sweetness,
-      tasting.acidityIntensity,
-      tasting.acidityQuality,
-      tasting.body,
-      tasting.aftertaste,
-      tasting.balance,
-      tasting.cleanCup,
-      tasting.overall
-    ];
-    // Q-grader standard is sum of 10 categories. But we have 11 items because acidity is split.
-    // Let's compute average of acidity quality & intensity to keep 10 dimensions, or simply average all and map to 100 points scale.
-    // Summing them: fragrance (10) + aroma (10) + flavor (10) + sweetness (10) + body (10) + aftertaste (10) + balance (10) + cleanCup (10) + overall (10) + average(acidityIntensity, acidityQuality) (10)
-    // Total out of 100. Let's do that! That's exactly Q-grader standard where acidity is a single 10pts field.
     const avgAcidity = (tasting.acidityIntensity + tasting.acidityQuality) / 2;
-    const finalScore = 
-      tasting.fragrance + 
-      tasting.aroma + 
-      tasting.flavor + 
-      tasting.sweetness + 
-      avgAcidity + 
-      tasting.body + 
-      tasting.aftertaste + 
-      tasting.balance + 
-      tasting.cleanCup + 
-      tasting.overall;
-
-    const processedTasting: Tasting = {
+    const processed: Tasting = {
       ...tasting,
-      score: Math.round(finalScore * 10) / 10,
+      score: Math.round((
+        tasting.fragrance + tasting.aroma + tasting.flavor + tasting.sweetness + avgAcidity +
+        tasting.body + tasting.aftertaste + tasting.balance + tasting.cleanCup + tasting.overall
+      ) * 10) / 10,
       status: 'completed',
-      tastingDate: tasting.tastingDate || new Date().toISOString().split('T')[0]
+      tastingDate: tasting.tastingDate || new Date().toISOString().split('T')[0],
     };
 
-    if (index >= 0) {
-      tastings[index] = processedTasting;
-    } else {
-      tastings.push(processedTasting);
-    }
-    
+    const tastings = this.getTastings();
+    const index = tastings.findIndex(item => item.id === processed.id);
+    if (index >= 0) tastings[index] = processed;
+    else tastings.push(processed);
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
-
-    // Trigger roast status recalculation
-    this.getRoasts(); 
-
-    return processedTasting;
+    saveLocalData(STORAGE_KEYS.ROASTS, recalculateRoastStatuses(this.getRoasts(), tastings));
+    markLocalMutation();
+    return processed;
   },
 
   generatePendingTastingsForRoast(roastId: string, roastDateStr: string): void {
     const tastings = this.getTastings();
-    const days: (7 | 10 | 14)[] = [7, 10, 14];
-    
-    days.forEach(day => {
-      // Calculate target date
+    ([7, 10, 14] as const).forEach(day => {
+      if (tastings.some(tasting => tasting.roastId === roastId && tasting.tastingDay === day)) return;
       const roastDate = new Date(roastDateStr);
       roastDate.setDate(roastDate.getDate() + day);
-      const targetDateStr = roastDate.toISOString().split('T')[0];
-
-      const pendingTasting: Tasting = {
+      tastings.push({
         id: `t_${roastId}_d${day}`,
         roastId,
         tastingDay: day,
-        tastingDate: targetDateStr,
+        tastingDate: roastDate.toISOString().split('T')[0],
         fragrance: 0,
         aroma: 0,
         flavor: 0,
@@ -685,16 +442,9 @@ export const DBService = {
         improvements: '',
         photos: [],
         status: 'pending',
-        createdAt: new Date().toISOString()
-      };
-
-      // Ensure no duplicate pending tasting
-      const exists = tastings.some(t => t.roastId === roastId && t.tastingDay === day);
-      if (!exists) {
-        tastings.push(pendingTasting);
-      }
+        createdAt: new Date().toISOString(),
+      });
     });
-
     saveLocalData(STORAGE_KEYS.TASTINGS, tastings);
   },
 
@@ -704,18 +454,24 @@ export const DBService = {
       return {
         ok: false,
         pending: true,
-        error: '未同期の変更があります。Google Sheetsへの再送が成功するまでクラウド同期で上書きしません。',
+        error: '未同期の変更があります。再送が成功するまでGoogle Sheetsの内容で上書きしません。',
       };
     }
 
+    const startedAt = Date.now();
     const snapshot = await fetchCloudSnapshot();
     if (!snapshot.ok) return snapshot;
     if (!('beans' in snapshot) || !('roasts' in snapshot) || !('steps' in snapshot)) {
       return { ok: false, error: 'Google Sheetsから不完全なデータが返りました。' };
     }
+    if (getTimestamp(STORAGE_KEYS.LAST_MUTATION) > startedAt) {
+      return { ok: false, pending: true, error: '同期中にローカル変更があったため、古い取得結果は破棄しました。' };
+    }
+
     saveLocalData(STORAGE_KEYS.BEANS, snapshot.beans);
     saveLocalData(STORAGE_KEYS.ROASTS, snapshot.roasts);
     saveLocalData(STORAGE_KEYS.STEPS, snapshot.steps);
+    localStorage.setItem(STORAGE_KEYS.LAST_SYNC, String(Date.now()));
     return { ok: true };
   },
 
@@ -735,51 +491,66 @@ export const DBService = {
     const pending = getPendingSyncPayloads();
     if (pending.length === 0) return { ok: true };
 
-    const remaining: CloudSyncPayload[] = [];
-    for (const payload of pending) {
-      const result = await postCloudSync(payload);
+    for (let index = 0; index < pending.length; index += 1) {
+      const payload = pending[index];
+      const result = await postCloudSync(payload, false);
       if (!result.ok) {
-        remaining.push(payload);
-        savePendingSyncPayloads([...remaining, ...pending.slice(pending.indexOf(payload) + 1)]);
-        return result;
+        savePendingSyncPayloads(pending.slice(index));
+        return { ...result, pending: true };
       }
     }
 
     savePendingSyncPayloads([]);
+    localStorage.setItem(STORAGE_KEYS.LAST_SYNC, String(Date.now()));
     return { ok: true };
   },
 
-  // Export / Import
   exportData(): string {
-    const data = {
+    return JSON.stringify({
       beans: this.getBeans(),
       roasts: this.getRoasts(),
       steps: this.getAllRoastSteps(),
-      tastings: this.getTastings()
-    };
-    return JSON.stringify(data, null, 2);
+      tastings: this.getTastings(),
+      settings: this.getSettings(),
+    }, null, 2);
   },
 
   importData(jsonStr: string): boolean {
     try {
       const data = JSON.parse(jsonStr);
-      if (data.beans && Array.isArray(data.beans)) {
-        saveLocalData(STORAGE_KEYS.BEANS, data.beans);
-      }
-      if (data.roasts && Array.isArray(data.roasts)) {
-        saveLocalData(STORAGE_KEYS.ROASTS, data.roasts);
-      }
-      if (data.steps && Array.isArray(data.steps)) {
-        saveLocalData(STORAGE_KEYS.STEPS, data.steps);
-      }
-      if (data.tastings && Array.isArray(data.tastings)) {
-        saveLocalData(STORAGE_KEYS.TASTINGS, data.tastings);
-      }
+      if (Array.isArray(data.beans)) saveLocalData(STORAGE_KEYS.BEANS, data.beans.map(normalizeBean));
+      if (Array.isArray(data.roasts)) saveLocalData(STORAGE_KEYS.ROASTS, data.roasts.map(normalizeRoast));
+      if (Array.isArray(data.steps)) saveLocalData(STORAGE_KEYS.STEPS, data.steps);
+      if (Array.isArray(data.tastings)) saveLocalData(STORAGE_KEYS.TASTINGS, data.tastings);
+      if (data.settings) this.saveSettings(data.settings);
+      markLocalMutation();
       return true;
-    } catch (e) {
-      console.error('Import failed: ', e);
+    } catch (error) {
+      console.error('Import failed: ', error);
       return false;
     }
-  }
-};
+  },
 
+  getSettings(): AppSettings {
+    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+    try {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_KEYS.SETTINGS) || '{}') };
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  },
+
+  saveSettings(settings: Partial<AppSettings>): AppSettings {
+    const merged = { ...DEFAULT_SETTINGS, ...settings };
+    if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+    return merged;
+  },
+
+  resetLocalData(): void {
+    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+  },
+
+  async resetCloudData(): Promise<CloudSyncResult> {
+    return postCloudSync({ action: 'resetAll' });
+  },
+};

@@ -6,6 +6,10 @@ import Navigation from "@/components/Navigation";
 export const metadata: Metadata = {
   title: "Coffee Lab - 焙煎記録データベース",
   description: "コーヒーの生豆、焙煎、テイスティングを記録するデータベース",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export const viewport = {
@@ -30,11 +34,7 @@ export default function RootLayout({
           className="fixed inset-0 pointer-events-none z-0"
           aria-hidden="true"
           style={{
-            backgroundImage: `
-              radial-gradient(ellipse at 15% 30%, rgba(208, 155, 106, 0.04) 0%, transparent 50%),
-              radial-gradient(ellipse at 85% 70%, rgba(100, 50, 10, 0.05) 0%, transparent 50%),
-              radial-gradient(ellipse at 50% 50%, rgba(30, 15, 5, 0.08) 0%, transparent 80%)
-            `,
+            backgroundImage: 'linear-gradient(180deg, rgba(208, 155, 106, 0.03), transparent 34%, rgba(208, 155, 106, 0.02))',
           }}
         />
         <div className="flex min-h-screen flex-col md:flex-row relative z-10">

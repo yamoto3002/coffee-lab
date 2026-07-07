@@ -15,10 +15,10 @@
   initialWeight: number; // in grams
   currentWeight: number; // in grams
   weightLossPercentage: number; // expected roast loss percentage
-  recommendedRoastDegree: string;
   notes: string;
   photoUrl?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type RoastStatus = 
@@ -78,5 +78,19 @@ export interface Tasting {
   photos: string[]; // base64 or object URLs
   status: 'pending' | 'completed';
   createdAt: string;
+}
+
+export type DisplayMode = 'beginner' | 'detail' | 'pro';
+
+export interface AppSettings {
+  displayMode: DisplayMode;
+  showBeanDetails: boolean;
+  showCropYear: boolean;
+  showPurchaseAge: boolean;
+  showProcess: boolean;
+  showStock: boolean;
+  showAnalysisCards: boolean;
+  showHomeSuggestions: boolean;
+  showLiveRoastDetails: boolean;
 }
 

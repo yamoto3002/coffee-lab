@@ -72,11 +72,7 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  /* Subtle noise-like radial gradient texture */
-  background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(208, 155, 106, 0.03) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(100, 60, 20, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 60% 80%, rgba(60, 30, 10, 0.03) 0%, transparent 50%);
+  background-image: linear-gradient(180deg, rgba(208, 155, 106, 0.025), rgba(11, 11, 12, 0) 38%);
   background-attachment: fixed;
 }
 

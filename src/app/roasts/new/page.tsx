@@ -50,7 +50,7 @@ function NewRoastContent() {
   const [roastId] = useState(() => DBService.generateNextRoastId());
   const [beanId, setBeanId] = useState(() => preselectedBeanId || DBService.getBeans()[0]?.id || '');
   const [roastDate, setRoastDate] = useState(new Date().toISOString().split('T')[0]);
-  const [greenWeight, setGreenWeight] = useState(200);
+  const [greenWeightInput, setGreenWeightInput] = useState('200');
   const [notes, setNotes] = useState('');
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -72,11 +72,15 @@ function NewRoastContent() {
   const [ghostSteps, setGhostSteps] = useState<TimelineEntry[]>([]);
 
   const intervalRef = useRef<number | null>(null);
-  const syncTimerRef = useRef<number | null>(null);
   const latestDraftRef = useRef<Roast | null>(null);
   const latestStepsRef = useRef<TimelineEntry[]>([]);
 
   const selectedBean = beans.find(bean => bean.id === beanId) ?? null;
+  const greenWeight = useMemo(() => {
+    const parsed = Number(greenWeightInput);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }, [greenWeightInput]);
+
   const predictedRoastedWeight = useMemo(() => {
     const loss = selectedBean?.weightLossPercentage ?? 15;
     return Math.round(greenWeight * (1 - loss / 100) * 10) / 10;
@@ -164,27 +168,11 @@ function NewRoastContent() {
 
   const queueBackgroundSync = useCallback((steps: TimelineEntry[], draftOverrides: Partial<RoastDraftOverrides> = {}) => {
     void steps;
+    void draftOverrides;
     if (!beanId) return;
-    const draft = buildDraftRoast(draftOverrides);
-    latestDraftRef.current = draft;
-    setSyncStatus('Google Sheetsへバックグラウンド同期中');
-
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = window.setTimeout(() => {
-      const draft = latestDraftRef.current;
-      if (!draft) return;
-      const currentRoastSteps = latestStepsRef.current.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId }));
-      DBService.saveRoastToCloud(draft, currentRoastSteps).then(result => {
-        if (result.ok) {
-          setSyncStatus('Google Sheetsへ同期済み');
-          setSyncError('');
-        } else {
-          setSyncStatus('同期待機中（ローカル保持）');
-          setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
-        }
-      });
-    }, 150);
-  }, [beanId, buildDraftRoast, roastId]);
+    latestDraftRef.current = buildDraftRoast(draftOverrides);
+    setSyncStatus('下書き記録中（正式保存まで在庫は変わりません）');
+  }, [beanId, buildDraftRoast]);
 
   const upsertTimeline = useCallback((entry: TimelineEntry, draftOverrides: Partial<RoastDraftOverrides> = {}) => {
     setTimeline(previous => {
@@ -302,16 +290,18 @@ function NewRoastContent() {
     setSyncError('');
     DBService.saveRoast(finalRoast, finalSteps, false);
     const result = await DBService.saveRoastToCloud(finalRoast, finalSteps);
+    const updatedBean = DBService.getBeanById(beanId);
+    const beanResult = updatedBean ? await DBService.saveBeanToCloud(updatedBean) : { ok: true };
     setIsSaving(false);
 
-    if (result.ok) {
+    if (result.ok && beanResult.ok) {
       setSyncStatus('Google Sheetsへ保存済み');
       router.push(`/roasts/${roastId}`);
       return;
     }
 
     setSyncStatus('保存失敗（ローカルには保持）');
-    setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
+    setSyncError(result.error || beanResult.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
   };
 
   const retryPendingSync = async () => {
@@ -393,7 +383,7 @@ function NewRoastContent() {
                 </label>
                 <label className="space-y-1 block">
                   <span className="text-xs text-[#8E8E93]">投入量(g)</span>
-                  <input type="number" value={greenWeight} onChange={event => setGreenWeight(Number(event.target.value))} className={`w-full rounded-xl border bg-[#1A1A1E] px-3 py-3 font-mono text-sm ${isOverStock ? 'border-[#EF4444]' : 'border-[#232326]'}`} />
+                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className={`w-full rounded-xl border bg-[#1A1A1E] px-3 py-3 font-mono text-sm ${isOverStock ? 'border-[#EF4444]' : 'border-[#232326]'}`} />
                 </label>
               </div>
               {selectedBean && (
@@ -504,7 +494,7 @@ function NewRoastContent() {
           <Panel title="保存内容">
             <div className="grid grid-cols-2 gap-3">
               <Field label="焙煎日" type="date" value={roastDate} onChange={setRoastDate} />
-              <Field label="投入量(g)" type="number" value={greenWeight} onChange={value => setGreenWeight(Number(value))} />
+              <Field label="投入量(g)" type="number" value={greenWeightInput} onChange={setGreenWeightInput} />
             </div>
             <div className="rounded-xl border border-[#232326] bg-[#1A1A1E] p-4">
               <div className="flex justify-between text-sm"><span className="text-[#8E8E93]">予想焙煎後重量</span><strong className="font-mono text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>

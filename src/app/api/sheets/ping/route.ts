@@ -1,9 +1,13 @@
-import { pingAppsScript } from '@/lib/googleSheets';
+import { pingAppsScript, validateAppsScriptConfig } from '@/lib/googleSheets';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    const validation = validateAppsScriptConfig();
+    if (!validation.ok) {
+      return Response.json({ ok: false, error: validation.error }, { status: 500 });
+    }
     const result = await pingAppsScript();
     return Response.json({ ok: true, result });
   } catch (error) {
