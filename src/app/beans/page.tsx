@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Edit2, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Edit2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
-import { DBService } from '@/lib/db';
-import { Bean, Roast } from '@/types';
+import { DBService, getAgingDays, getYearsSince } from '@/lib/db';
+import { AppSettings, Bean, Roast } from '@/types';
 
 type BeanFormValues = {
   name: string;
@@ -13,18 +13,40 @@ type BeanFormValues = {
   region: string;
   farm: string;
   producer: string;
-  altitude: number;
+  altitude: string;
   variety: string;
   process: string;
+  customProcess: string;
   cropYear: string;
   purchaseShop: string;
   purchaseDate: string;
-  purchasePrice: number;
-  initialWeight: number;
-  weightLossPercentage: number;
-  recommendedRoastDegree: string;
+  purchasePrice: string;
+  initialWeight: string;
+  weightLossPercentage: string;
   notes: string;
 };
+
+const PROCESS_OPTIONS = [
+  'Natural',
+  'Washed',
+  'Honey',
+  'Pulped Natural',
+  'Semi Washed',
+  'Wet Hulled',
+  'Anaerobic',
+  'Anaerobic Natural',
+  'Anaerobic Washed',
+  'Carbonic Maceration',
+  'Double Fermentation',
+  'Extended Fermentation',
+  'Thermal Shock',
+  'Koji Fermentation',
+  'Yeast Fermentation',
+  'Winey',
+  'Decaf',
+  'Experimental',
+  'Other',
+];
 
 const emptyForm = (): BeanFormValues => ({
   name: '',
@@ -32,25 +54,29 @@ const emptyForm = (): BeanFormValues => ({
   region: '',
   farm: '',
   producer: '',
-  altitude: 0,
+  altitude: '',
   variety: '',
   process: 'Washed',
+  customProcess: '',
   cropYear: '',
   purchaseShop: '',
   purchaseDate: new Date().toISOString().split('T')[0],
-  purchasePrice: 0,
-  initialWeight: 250,
-  weightLossPercentage: 15,
-  recommendedRoastDegree: 'Medium-Light',
+  purchasePrice: '',
+  initialWeight: '250',
+  weightLossPercentage: '15',
   notes: '',
 });
 
-const processOptions = ['Washed', 'Natural', 'Honey', 'Anaerobic'];
-const roastDegreeOptions = ['Light', 'Medium-Light', 'Medium', 'Medium-Dark', 'Dark'];
+function numberValue(value: string, fallback = 0) {
+  if (value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 export default function BeansPage() {
   const [beans, setBeans] = useState<Bean[]>(() => DBService.getBeans());
   const [roasts, setRoasts] = useState<Roast[]>(() => DBService.getRoasts());
+  const [settings, setSettings] = useState<AppSettings>(() => DBService.getSettings());
   const [selectedBeanId, setSelectedBeanId] = useState<string | null>(() => DBService.getBeans()[0]?.id ?? null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,12 +85,15 @@ export default function BeansPage() {
   const [syncStatus, setSyncStatus] = useState('ローカル準備完了');
   const [syncError, setSyncError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingCount, setPendingCount] = useState(() => DBService.getPendingSyncCount());
 
   const loadLocalData = useCallback(() => {
     const allBeans = DBService.getBeans();
     setBeans(allBeans);
     setRoasts(DBService.getRoasts());
-    setSelectedBeanId(current => current ?? allBeans[0]?.id ?? null);
+    setSettings(DBService.getSettings());
+    setPendingCount(DBService.getPendingSyncCount());
+    setSelectedBeanId(current => current && allBeans.some(bean => bean.id === current) ? current : allBeans[0]?.id ?? null);
   }, []);
 
   const syncFromCloud = useCallback(async () => {
@@ -73,19 +102,20 @@ export default function BeansPage() {
       loadLocalData();
       setSyncError('');
       setSyncStatus(`同期済み ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`);
-    } else if (result.pending) {
+      return;
+    }
+    setPendingCount(DBService.getPendingSyncCount());
+    if (result.pending) {
       setSyncStatus('未同期の変更があります');
-      setSyncError(result.error || 'Googleスプレッドシートへの保存待ちです。');
+      setSyncError(result.error || 'Google Sheetsへの保存待ちです。');
     } else {
       setSyncStatus('同期エラー');
-      setSyncError(result.error || 'Googleスプレッドシートからの読み込みに失敗しました。');
+      setSyncError(result.error || 'Google Sheetsからの読み込みに失敗しました。');
     }
   }, [loadLocalData]);
 
   useEffect(() => {
-    window.setTimeout(syncFromCloud, 0);
-    const timer = window.setInterval(syncFromCloud, 5000);
-    return () => window.clearInterval(timer);
+    void syncFromCloud();
   }, [syncFromCloud]);
 
   const selectedBean = beans.find(bean => bean.id === selectedBeanId) ?? null;
@@ -95,16 +125,12 @@ export default function BeansPage() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return beans;
     return beans.filter(bean =>
-      [bean.name, bean.country, bean.region, bean.process, bean.variety]
+      [bean.name, bean.country, bean.region, bean.process, bean.variety, bean.cropYear]
         .join(' ')
         .toLowerCase()
         .includes(query)
     );
   }, [beans, searchQuery]);
-
-  const updateForm = (key: keyof BeanFormValues, value: string | number) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
 
   const openAddModal = () => {
     setEditingBean(null);
@@ -120,31 +146,37 @@ export default function BeansPage() {
       region: bean.region,
       farm: bean.farm,
       producer: bean.producer,
-      altitude: bean.altitude,
+      altitude: bean.altitude ? String(bean.altitude) : '',
       variety: bean.variety,
-      process: bean.process,
+      process: PROCESS_OPTIONS.includes(bean.process) ? bean.process : 'Other',
+      customProcess: PROCESS_OPTIONS.includes(bean.process) ? '' : bean.process,
       cropYear: bean.cropYear,
       purchaseShop: bean.purchaseShop,
       purchaseDate: bean.purchaseDate,
-      purchasePrice: bean.purchasePrice,
-      initialWeight: bean.initialWeight,
-      weightLossPercentage: bean.weightLossPercentage ?? 15,
-      recommendedRoastDegree: bean.recommendedRoastDegree,
+      purchasePrice: bean.purchasePrice ? String(bean.purchasePrice) : '',
+      initialWeight: String(bean.initialWeight || ''),
+      weightLossPercentage: String(bean.weightLossPercentage ?? 15),
       notes: bean.notes,
     });
     setIsModalOpen(true);
   };
 
+  const updateForm = (key: keyof BeanFormValues, value: string) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.name.trim() || !form.country.trim() || !form.purchaseDate || form.initialWeight <= 0) {
+    const initialWeight = numberValue(form.initialWeight);
+    if (!form.name.trim() || !form.country.trim() || !form.purchaseDate || initialWeight <= 0) {
       alert('生豆名、生産国、購入日、内容量を入力してください。');
       return;
     }
 
+    const process = form.process === 'Other' ? form.customProcess.trim() || 'Other' : form.process;
     const currentWeight = editingBean
-      ? Math.max(0, editingBean.currentWeight + (form.initialWeight - editingBean.initialWeight))
-      : form.initialWeight;
+      ? Math.max(0, editingBean.currentWeight + (initialWeight - editingBean.initialWeight))
+      : initialWeight;
 
     const bean: Bean = {
       id: editingBean?.id ?? DBService.generateNextBeanId(),
@@ -153,20 +185,20 @@ export default function BeansPage() {
       region: form.region.trim(),
       farm: form.farm.trim(),
       producer: form.producer.trim(),
-      altitude: Number(form.altitude) || 0,
+      altitude: numberValue(form.altitude),
       variety: form.variety.trim(),
-      process: form.process,
+      process,
       cropYear: form.cropYear.trim(),
       purchaseShop: form.purchaseShop.trim(),
       purchaseDate: form.purchaseDate,
-      purchasePrice: Number(form.purchasePrice) || 0,
-      initialWeight: Number(form.initialWeight) || 0,
+      purchasePrice: numberValue(form.purchasePrice),
+      initialWeight,
       currentWeight,
-      weightLossPercentage: Number(form.weightLossPercentage) || 15,
-      recommendedRoastDegree: form.recommendedRoastDegree,
+      weightLossPercentage: numberValue(form.weightLossPercentage, 15),
       notes: form.notes.trim(),
       photoUrl: editingBean?.photoUrl || '',
       createdAt: editingBean?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     setIsSaving(true);
@@ -178,18 +210,18 @@ export default function BeansPage() {
 
     const result = await DBService.saveBeanToCloud(bean);
     setIsSaving(false);
+    setPendingCount(DBService.getPendingSyncCount());
 
     if (result.ok) {
       setIsModalOpen(false);
       setEditingBean(null);
       setSyncStatus('Google Sheetsへ保存済み');
       setSyncError('');
-      await syncFromCloud();
       return;
     }
 
     setSyncStatus('保存失敗（ローカルには保持）');
-    setSyncError(result.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
+    setSyncError(result.error || 'Google Sheetsへの保存に失敗しました。未同期データとして保持しています。');
   };
 
   const deleteBean = async (bean: Bean) => {
@@ -197,27 +229,26 @@ export default function BeansPage() {
     setSyncError('');
     DBService.deleteBean(bean.id, false);
     loadLocalData();
-    setSelectedBeanId(null);
     setSyncStatus('削除しました。Google Sheetsへ同期中');
     const result = await DBService.deleteBeanFromCloud(bean.id);
-    if (result.ok) {
-      setSyncStatus('Google Sheetsから削除済み');
-    } else {
+    setPendingCount(DBService.getPendingSyncCount());
+    if (result.ok) setSyncStatus('Google Sheetsから削除済み');
+    else {
       setSyncStatus('削除同期失敗（ローカルには反映済み）');
-      setSyncError(result.error || 'Googleスプレッドシートへの削除同期に失敗しました。');
+      setSyncError(result.error || 'Google Sheetsへの削除同期に失敗しました。');
     }
   };
 
   const retryPendingSync = async () => {
     setSyncStatus('未同期データを再送中');
     const result = await DBService.retryPendingSync();
+    setPendingCount(DBService.getPendingSyncCount());
     if (result.ok) {
       setSyncError('');
       setSyncStatus('未同期データを再送しました');
-      await syncFromCloud();
     } else {
       setSyncStatus('再送失敗');
-      setSyncError(result.error || 'Googleスプレッドシートへの再送に失敗しました。');
+      setSyncError(result.error || 'Google Sheetsへの再送に失敗しました。');
     }
   };
 
@@ -226,31 +257,26 @@ export default function BeansPage() {
       <header className="flex items-center justify-between border-b border-[#232326] bg-[#0E0E10] px-4 py-4 md:px-6">
         <div>
           <h1 className="text-xl font-bold tracking-wide">生豆管理</h1>
-          <p className="text-xs text-[#8E8E93]">在庫、減耗率、焙煎履歴をGoogle Sheetsと同期</p>
+          <p className="text-xs text-[#8E8E93]">在庫、購入情報、精製方法をGoogle Sheetsと同期</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="hidden text-xs text-[#8E8E93] md:inline">{syncStatus}</span>
-          {DBService.getPendingSyncCount() > 0 && (
-            <button type="button" onClick={retryPendingSync} className="hidden rounded-lg border border-[#D09B6A]/40 px-3 py-2 text-xs font-semibold text-[#D09B6A] md:inline">
+          {pendingCount > 0 && (
+            <button type="button" onClick={retryPendingSync} className="rounded-lg border border-[#D09B6A]/40 px-3 py-2 text-xs font-semibold text-[#D09B6A]">
               未同期を再送
             </button>
           )}
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="flex items-center gap-1.5 rounded-lg bg-[#D09B6A] px-4 py-2 text-sm font-semibold text-[#0B0B0C] transition hover:bg-[#B37B4D] active:scale-95"
-          >
+          <button type="button" onClick={syncFromCloud} className="rounded-lg bg-[#1C1C1F] p-2 text-[#8E8E93] hover:text-[#F4F4F6]" aria-label="再同期">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={openAddModal} className="flex items-center gap-1.5 rounded-lg bg-[#D09B6A] px-4 py-2 text-sm font-semibold text-[#0B0B0C]">
             <Plus className="h-4 w-4" />
-            生豆を追加
+            追加
           </button>
         </div>
       </header>
 
-      {syncError && (
-        <div className="border-b border-[#7F1D1D] bg-[#450A0A] px-4 py-3 text-sm text-red-100 md:px-6">
-          {syncError}
-        </div>
-      )}
+      {syncError && <div className="border-b border-[#7F1D1D] bg-[#450A0A] px-4 py-3 text-sm text-red-100 md:px-6">{syncError}</div>}
 
       <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(320px,40%)_1fr]">
         <section className="border-r border-[#232326] bg-[#0B0B0C]">
@@ -272,12 +298,7 @@ export default function BeansPage() {
               const selected = bean.id === selectedBeanId;
               const ratio = bean.initialWeight > 0 ? bean.currentWeight / bean.initialWeight : 0;
               return (
-                <button
-                  key={bean.id}
-                  type="button"
-                  onClick={() => setSelectedBeanId(bean.id)}
-                  className={`block w-full p-4 text-left transition ${selected ? 'bg-[#18181B]' : 'hover:bg-[#131315]'}`}
-                >
+                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} className={`block w-full p-4 text-left transition ${selected ? 'bg-[#18181B]' : 'hover:bg-[#131315]'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -285,100 +306,37 @@ export default function BeansPage() {
                         <span className="text-xs text-[#8E8E93]">{bean.country}</span>
                       </div>
                       <h2 className="mt-1 line-clamp-1 text-sm font-semibold text-[#F4F4F6]">{bean.name}</h2>
+                      {settings.showProcess && <p className="mt-1 text-xs text-[#8E8E93]">{bean.process}</p>}
                     </div>
-                    <div className="flex gap-1">
-                      <span className="rounded-md bg-[#D09B6A]/10 px-2 py-1 font-mono text-xs font-bold text-[#D09B6A]">-{bean.weightLossPercentage}%</span>
-                    </div>
+                    <span className="rounded-md bg-[#D09B6A]/10 px-2 py-1 font-mono text-xs font-bold text-[#D09B6A]">-{bean.weightLossPercentage}%</span>
                   </div>
-                  <div className="mt-3 space-y-1">
-                    <div className="flex justify-between font-mono text-xs">
-                      <span className="text-[#8E8E93]">在庫</span>
-                      <span>{bean.currentWeight}g / {bean.initialWeight}g</span>
+                  {settings.showStock && (
+                    <div className="mt-3 space-y-1">
+                      <div className="flex justify-between font-mono text-xs">
+                        <span className="text-[#8E8E93]">在庫</span>
+                        <span>{bean.currentWeight}g / {bean.initialWeight}g</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-[#1C1C1F]">
+                        <div className="h-full bg-[#D09B6A]" style={{ width: `${Math.max(0, Math.min(100, ratio * 100))}%` }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[#1C1C1F]">
-                      <div className="h-full bg-[#D09B6A]" style={{ width: `${Math.max(0, Math.min(100, ratio * 100))}%` }} />
-                    </div>
-                  </div>
+                  )}
                 </button>
               );
             })}
-            {filteredBeans.length === 0 && (
-              <div className="p-10 text-center text-sm text-[#8E8E93]">生豆が見つかりません</div>
-            )}
+            {filteredBeans.length === 0 && <div className="p-10 text-center text-sm text-[#8E8E93]">まだ生豆がありません。最初の豆を登録しましょう。</div>}
           </div>
         </section>
 
         <section className="overflow-y-auto p-4 md:p-6">
           {selectedBean ? (
-            <div className="mx-auto max-w-4xl space-y-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="rounded bg-[#D09B6A]/10 px-2 py-1 font-mono text-xs text-[#D09B6A]">{selectedBean.id}</span>
-                    <span className="text-sm text-[#8E8E93]">{selectedBean.country}</span>
-                  </div>
-                  <h2 className="text-2xl font-bold">{selectedBean.name}</h2>
-                  <p className="mt-1 text-sm text-[#8E8E93]">{selectedBean.region || '-'} {selectedBean.farm ? `/ ${selectedBean.farm}` : ''}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => openEditModal(selectedBean)} className="rounded-lg bg-[#1C1C1F] p-2 text-[#8E8E93] hover:text-[#F4F4F6]">
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => deleteBean(selectedBean)} className="rounded-lg bg-[#1C1C1F] p-2 text-[#8E8E93] hover:text-[#EF4444]">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Metric label="現在在庫" value={`${selectedBean.currentWeight}g`} />
-                <Metric label="購入量" value={`${selectedBean.initialWeight}g`} />
-                <Metric label="減耗率" value={`${selectedBean.weightLossPercentage}%`} accent />
-                <Metric label="推奨焙煎度" value={selectedBean.recommendedRoastDegree || '-'} />
-              </div>
-
-              <div className="grid gap-3 rounded-xl border border-[#232326] bg-[#131315] p-4 text-sm md:grid-cols-3">
-                <Info label="精製" value={selectedBean.process} />
-                <Info label="品種" value={selectedBean.variety || '-'} />
-                <Info label="標高" value={selectedBean.altitude ? `${selectedBean.altitude}m` : '-'} />
-                <Info label="購入日" value={selectedBean.purchaseDate} />
-                <Info label="購入店" value={selectedBean.purchaseShop || '-'} />
-                <Info label="購入価格" value={selectedBean.purchasePrice ? `¥${selectedBean.purchasePrice.toLocaleString()}` : '-'} />
-              </div>
-
-              {selectedBean.notes && (
-                <div className="rounded-xl border border-[#232326] bg-[#131315] p-4">
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">メモ</h3>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#E4E4E7]">{selectedBean.notes}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-[#8E8E93]">この生豆の焙煎履歴</h3>
-                  <Link href={`/roasts/new?beanId=${selectedBean.id}`} className="text-sm font-semibold text-[#D09B6A] hover:underline">焙煎する</Link>
-                </div>
-                {selectedBeanRoasts.map(roast => (
-                  <Link key={roast.id} href={`/roasts/${roast.id}`} className="flex items-center justify-between rounded-xl border border-[#232326] bg-[#131315] p-4 transition hover:bg-[#1E1E22]">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs text-[#8E8E93]">
-                        <span className="font-mono text-[#D09B6A]">{roast.id}</span>
-                        <span>{roast.roastDate}</span>
-                      </div>
-                      <div className="mt-1 flex gap-4 text-xs text-[#A1A1AA]">
-                        <span>投入: <strong className="font-mono text-[#F4F4F6]">{roast.greenWeight}g</strong></span>
-                        <span>予想後: <strong className="font-mono text-[#F4F4F6]">{roast.roastedWeight}g</strong></span>
-                        <span>Dev: <strong className="font-mono text-[#F4F4F6]">{roast.developmentRatio}%</strong></span>
-                      </div>
-                    </div>
-                    <ArrowUpRight className="h-4 w-4 text-[#8E8E93]" />
-                  </Link>
-                ))}
-                {selectedBeanRoasts.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-[#232326] p-8 text-center text-sm text-[#8E8E93]">まだ焙煎履歴がありません</div>
-                )}
-              </div>
-            </div>
+            <BeanDetail
+              bean={selectedBean}
+              roasts={selectedBeanRoasts}
+              settings={settings}
+              onEdit={() => openEditModal(selectedBean)}
+              onDelete={() => deleteBean(selectedBean)}
+            />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-[#8E8E93]">生豆を選択してください</div>
           )}
@@ -388,30 +346,27 @@ export default function BeansPage() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingBean ? '生豆を編集' : '生豆を追加'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="生豆名" required value={form.name} onChange={value => updateForm('name', value)} placeholder="Sigri Estate Peaberry" />
-            <Field label="生産国" required value={form.country} onChange={value => updateForm('country', value)} placeholder="Papua New Guinea" />
-            <Field label="地域" value={form.region} onChange={value => updateForm('region', value)} placeholder="Wahgi Valley" />
-            <Field label="農園 / Station" value={form.farm} onChange={value => updateForm('farm', value)} placeholder="Sigri Estate" />
-            <Field label="生産者" value={form.producer} onChange={value => updateForm('producer', value)} placeholder="Producer" />
-            <Field label="品種" value={form.variety} onChange={value => updateForm('variety', value)} placeholder="Typica" />
+            <Field label="生豆名" required value={form.name} onChange={value => updateForm('name', value)} placeholder="Chelbesa G1" />
+            <Field label="生産国" required value={form.country} onChange={value => updateForm('country', value)} placeholder="Ethiopia" />
+            <Field label="地域" value={form.region} onChange={value => updateForm('region', value)} placeholder="Yirgacheffe" />
+            <Field label="農園 / Station" value={form.farm} onChange={value => updateForm('farm', value)} />
+            <Field label="生産者" value={form.producer} onChange={value => updateForm('producer', value)} />
+            <Field label="品種" value={form.variety} onChange={value => updateForm('variety', value)} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <SelectField label="精製" value={form.process} options={processOptions} onChange={value => updateForm('process', value)} />
-            <Field label="標高(m)" type="number" value={form.altitude} onChange={value => updateForm('altitude', Number(value))} />
-            <Field label="クロップ年" value={form.cropYear} onChange={value => updateForm('cropYear', value)} placeholder="2026" />
+            <SelectField label="精製" value={form.process} options={PROCESS_OPTIONS} onChange={value => updateForm('process', value)} />
+            {form.process === 'Other' && <Field label="精製方法（自由入力）" value={form.customProcess} onChange={value => updateForm('customProcess', value)} />}
+            <Field label="標高(m)" type="number" inputMode="numeric" value={form.altitude} onChange={value => updateForm('altitude', value)} />
+            <Field label="クロップ年" type="number" inputMode="numeric" value={form.cropYear} onChange={value => updateForm('cropYear', value)} placeholder="2024" />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="購入店" value={form.purchaseShop} onChange={value => updateForm('purchaseShop', value)} />
             <Field label="購入日" required type="date" value={form.purchaseDate} onChange={value => updateForm('purchaseDate', value)} />
-            <Field label="購入価格(円)" type="number" value={form.purchasePrice} onChange={value => updateForm('purchasePrice', Number(value))} />
-            <Field label="内容量(g)" required type="number" value={form.initialWeight} onChange={value => updateForm('initialWeight', Number(value))} />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="減耗率(%)" required type="number" step="0.1" value={form.weightLossPercentage} onChange={value => updateForm('weightLossPercentage', Number(value))} />
-            <SelectField label="推奨焙煎度" value={form.recommendedRoastDegree} options={roastDegreeOptions} onChange={value => updateForm('recommendedRoastDegree', value)} />
+            <Field label="購入価格(円)" type="number" inputMode="numeric" value={form.purchasePrice} onChange={value => updateForm('purchasePrice', value)} />
+            <Field label="内容量(g)" required type="number" inputMode="decimal" value={form.initialWeight} onChange={value => updateForm('initialWeight', value)} />
+            <Field label="減耗率(%)" required type="number" inputMode="decimal" step="0.1" value={form.weightLossPercentage} onChange={value => updateForm('weightLossPercentage', value)} />
           </div>
 
           <label className="block space-y-1">
@@ -431,11 +386,91 @@ export default function BeansPage() {
   );
 }
 
+function BeanDetail({ bean, roasts, settings, onEdit, onDelete }: { bean: Bean; roasts: Roast[]; settings: AppSettings; onEdit: () => void; onDelete: () => void }) {
+  const purchaseAge = getAgingDays(bean.purchaseDate);
+  const cropAge = getYearsSince(bean.cropYear);
+  const stockRatio = bean.initialWeight > 0 ? bean.currentWeight / bean.initialWeight : 0;
+  const freshness = cropAge !== null && cropAge >= 3 ? '長期保管注意' : stockRatio < 0.25 ? 'そろそろ使い切りたい' : '良好';
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-[#D09B6A]/10 px-2 py-1 font-mono text-xs text-[#D09B6A]">{bean.id}</span>
+            <span className="text-sm text-[#8E8E93]">{bean.country}</span>
+          </div>
+          <h2 className="text-2xl font-bold">{bean.name}</h2>
+          <p className="mt-1 text-sm text-[#8E8E93]">{bean.region || '-'} {bean.farm ? `/ ${bean.farm}` : ''}</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onEdit} className="rounded-lg bg-[#1C1C1F] p-2 text-[#8E8E93] hover:text-[#F4F4F6]" aria-label="編集">
+            <Edit2 className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onDelete} className="rounded-lg bg-[#1C1C1F] p-2 text-[#8E8E93] hover:text-[#EF4444]" aria-label="削除">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Metric label="現在在庫" value={`${bean.currentWeight}g`} />
+        <Metric label="購入量" value={`${bean.initialWeight}g`} />
+        <Metric label="減耗率" value={`${bean.weightLossPercentage}%`} accent />
+        <Metric label="鮮度メモ" value={freshness} />
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-[#232326] bg-[#131315] p-4 text-sm md:grid-cols-3">
+        {settings.showProcess && <Info label="精製" value={bean.process || '-'} />}
+        <Info label="品種" value={bean.variety || '-'} />
+        <Info label="標高" value={bean.altitude ? `${bean.altitude}m` : '-'} />
+        <Info label="購入日" value={bean.purchaseDate || '-'} />
+        {settings.showPurchaseAge && <Info label="購入から" value={bean.purchaseDate ? `${Math.max(0, purchaseAge)}日` : '-'} />}
+        {settings.showCropYear && <Info label="クロップ" value={bean.cropYear ? `Crop ${bean.cropYear}${cropAge !== null ? ` / 約${cropAge}年経過` : ''}` : '-'} />}
+        {settings.showBeanDetails && <Info label="購入店" value={bean.purchaseShop || '-'} />}
+        {settings.showBeanDetails && <Info label="購入価格" value={bean.purchasePrice ? `¥${bean.purchasePrice.toLocaleString()}` : '-'} />}
+        {settings.showBeanDetails && <Info label="生産者" value={bean.producer || '-'} />}
+      </div>
+
+      {bean.notes && (
+        <div className="rounded-xl border border-[#232326] bg-[#131315] p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">メモ</h3>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#E4E4E7]">{bean.notes}</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-[#8E8E93]">この生豆の焙煎履歴</h3>
+          <Link href={`/roasts/new?beanId=${bean.id}`} className="text-sm font-semibold text-[#D09B6A] hover:underline">焙煎する</Link>
+        </div>
+        {roasts.map(roast => (
+          <Link key={roast.id} href={`/roasts/${roast.id}`} className="flex items-center justify-between rounded-xl border border-[#232326] bg-[#131315] p-4 transition hover:bg-[#1E1E22]">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-[#8E8E93]">
+                <span className="font-mono text-[#D09B6A]">{roast.id}</span>
+                <span>{roast.roastDate}</span>
+              </div>
+              <div className="mt-1 flex gap-4 text-xs text-[#A1A1AA]">
+                <span>投入: <strong className="font-mono text-[#F4F4F6]">{roast.greenWeight}g</strong></span>
+                <span>焙煎後: <strong className="font-mono text-[#F4F4F6]">{roast.roastedWeight}g</strong></span>
+                <span>Dev: <strong className="font-mono text-[#F4F4F6]">{roast.developmentRatio}%</strong></span>
+              </div>
+            </div>
+            <ArrowUpRight className="h-4 w-4 text-[#8E8E93]" />
+          </Link>
+        ))}
+        {roasts.length === 0 && <div className="rounded-xl border border-dashed border-[#232326] p-8 text-center text-sm text-[#8E8E93]">まだ焙煎履歴がありません</div>}
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-xl border border-[#232326] bg-[#131315] p-4">
       <span className="block text-xs text-[#8E8E93]">{label}</span>
-      <strong className={`mt-1 block font-mono text-xl ${accent ? 'text-[#D09B6A]' : 'text-[#F4F4F6]'}`}>{value}</strong>
+      <strong className={`mt-1 block font-mono text-lg ${accent ? 'text-[#D09B6A]' : 'text-[#F4F4F6]'}`}>{value}</strong>
     </div>
   );
 }
@@ -449,19 +484,20 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder, required = false, step }: {
+function Field({ label, value, onChange, type = 'text', placeholder, required = false, step, inputMode }: {
   label: string;
-  value: string | number;
+  value: string;
   onChange: (value: string) => void;
   type?: string;
   placeholder?: string;
   required?: boolean;
   step?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
   return (
     <label className="block space-y-1">
       <span className="text-xs font-semibold text-[#8E8E93]">{label} {required && <span className="text-[#EF4444]">*</span>}</span>
-      <input type={type} step={step} value={value} placeholder={placeholder} onChange={event => onChange(event.target.value)} className="w-full rounded-lg border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm text-[#F4F4F6]" />
+      <input type={type} step={step} inputMode={inputMode} value={value} placeholder={placeholder} onChange={event => onChange(event.target.value)} className="w-full rounded-lg border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm text-[#F4F4F6]" />
     </label>
   );
 }
@@ -476,7 +512,3 @@ function SelectField({ label, value, options, onChange }: { label: string; value
     </label>
   );
 }
-
-
-
-

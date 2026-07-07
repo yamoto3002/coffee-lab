@@ -4,10 +4,10 @@ import { calculateDevRatio, calculateDevTime, calculateLossRatio } from '@/lib/d
 type AppsScriptJson = {
   ok?: boolean;
   error?: string;
-  beans?: AppsScriptBeanRow[];
-  roasts?: AppsScriptRoastRow[];
-  bean?: AppsScriptBeanRow;
-  roast?: AppsScriptRoastRow;
+  beans?: Record<string, unknown>[];
+  roasts?: Record<string, unknown>[];
+  bean?: Record<string, unknown>;
+  roast?: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -17,50 +17,44 @@ type SheetsSnapshot = {
   steps: RoastStep[];
 };
 
-type AppsScriptBeanRow = {
-  id?: string;
-  name?: string;
-  country?: string;
-  purchaseDate?: string;
-  stockWeight?: string | number;
-  weightLossPercentage?: string | number;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type AppsScriptRoastRow = {
-  id?: string;
-  roastDate?: string;
-  beanId?: string;
-  inputWeight?: string | number;
-  expectedOutputWeight?: string | number;
-  timelineJson?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
 type RoastTimelinePayload = {
   steps?: RoastStep[];
-  firstCrackTime?: string;
   secondCrackTime?: string;
-  dropTime?: string;
-  notes?: string;
-  status?: Roast['status'];
 };
 
-const DEFAULT_ROAST_STATUS: Roast['status'] = 'waiting_day7';
+const APPS_SCRIPT_HOST_RE = /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:\?.*)?$/;
 
-function appsScriptUrl() {
+export function validateAppsScriptConfig() {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL?.trim();
   if (!url) {
-    throw new Error('GOOGLE_APPS_SCRIPT_URL is not set. Deploy the Google Apps Script Web App and set its URL in your environment variables.');
+    return {
+      ok: false,
+      error: 'GOOGLE_APPS_SCRIPT_URLが未設定です。Apps Script Web Appの /exec URLを環境変数に設定してください。',
+    };
   }
-  return url;
+  if (!APPS_SCRIPT_HOST_RE.test(url)) {
+    return {
+      ok: false,
+      error: 'GOOGLE_APPS_SCRIPT_URLが不正です。https://script.google.com/macros/s/.../exec で終わるWeb App URLを設定してください。',
+    };
+  }
+  return { ok: true, url };
+}
+
+function appsScriptUrl() {
+  const validation = validateAppsScriptConfig();
+  if (!validation.ok || !validation.url) throw new Error(validation.error);
+  return validation.url;
 }
 
 function toNumber(value: unknown, fallback = 0) {
+  if (value === '' || value === null || value === undefined) return fallback;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function toStringValue(value: unknown) {
+  return value === null || value === undefined ? '' : String(value);
 }
 
 async function parseJsonResponse(response: Response): Promise<AppsScriptJson> {
@@ -68,7 +62,12 @@ async function parseJsonResponse(response: Response): Promise<AppsScriptJson> {
   try {
     return JSON.parse(text) as AppsScriptJson;
   } catch {
-    throw new Error(`Apps Script returned non-JSON response: ${text.slice(0, 240)}`);
+    const snippet = text.slice(0, 500);
+    console.error('Apps Script returned non-JSON response:', snippet);
+    if (/^\s*<!doctype html|^\s*<html/i.test(text)) {
+      throw new Error('Google Apps ScriptからJSONではない応答が返りました。URLまたは公開設定を確認してください。');
+    }
+    throw new Error('Google Apps ScriptからJSONではない応答が返りました。Apps ScriptのdoGet/doPostがJSONを返しているか確認してください。');
   }
 }
 
@@ -85,50 +84,48 @@ async function callAppsScript(action: string, payload?: Record<string, unknown>)
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify({ action, ...payload });
   } else {
-    const separator = url.includes('?') ? '&' : '?';
-    requestUrl = `${url}${separator}action=${encodeURIComponent(action)}`;
+    requestUrl = `${url}${url.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}`;
   }
 
   const response = await fetch(requestUrl, init);
   const data = await parseJsonResponse(response);
-
   if (!response.ok || data.ok === false) {
     throw new Error(data.error || `Apps Script request failed: ${response.status}`);
   }
-
   return data;
 }
 
-function normalizeBean(row: AppsScriptBeanRow): Bean {
-  const stockWeight = toNumber(row.stockWeight);
+function normalizeBean(row: Record<string, unknown>): Bean {
+  const initialWeight = toNumber(row.initialWeight, toNumber(row.stockWeight));
+  const currentWeight = toNumber(row.currentWeight, toNumber(row.stockWeight, initialWeight));
   return {
-    id: String(row.id || ''),
-    name: String(row.name || ''),
-    country: String(row.country || ''),
-    region: '',
-    farm: '',
-    producer: '',
-    altitude: 0,
-    variety: '',
-    process: 'Washed',
-    cropYear: '',
-    purchaseShop: '',
-    purchaseDate: String(row.purchaseDate || ''),
-    purchasePrice: 0,
-    initialWeight: stockWeight,
-    currentWeight: stockWeight,
+    id: toStringValue(row.id),
+    name: toStringValue(row.name),
+    country: toStringValue(row.country),
+    region: toStringValue(row.region),
+    farm: toStringValue(row.farm),
+    producer: toStringValue(row.producer),
+    altitude: toNumber(row.altitude),
+    variety: toStringValue(row.variety),
+    process: toStringValue(row.process) || 'Washed',
+    cropYear: toStringValue(row.cropYear),
+    purchaseShop: toStringValue(row.purchaseShop),
+    purchaseDate: toStringValue(row.purchaseDate),
+    purchasePrice: toNumber(row.purchasePrice),
+    initialWeight,
+    currentWeight,
     weightLossPercentage: toNumber(row.weightLossPercentage, 15),
-    recommendedRoastDegree: 'Medium-Light',
-    notes: '',
-    photoUrl: '',
-    createdAt: String(row.createdAt || new Date().toISOString()),
+    notes: toStringValue(row.notes),
+    photoUrl: toStringValue(row.photoUrl),
+    createdAt: toStringValue(row.createdAt) || new Date().toISOString(),
+    updatedAt: toStringValue(row.updatedAt) || undefined,
   };
 }
 
-function parseTimelinePayload(raw: string | undefined): RoastTimelinePayload {
+function parseTimelinePayload(raw: unknown): RoastTimelinePayload {
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (Array.isArray(parsed)) return { steps: parsed as RoastStep[] };
     if (parsed && typeof parsed === 'object') return parsed as RoastTimelinePayload;
   } catch {
@@ -137,18 +134,18 @@ function parseTimelinePayload(raw: string | undefined): RoastTimelinePayload {
   return {};
 }
 
-function normalizeRoast(row: AppsScriptRoastRow): { roast: Roast; steps: RoastStep[] } {
-  const roastId = String(row.id || '');
+function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: RoastStep[] } {
+  const roastId = toStringValue(row.id);
   const timeline = parseTimelinePayload(row.timelineJson);
-  const inputWeight = toNumber(row.inputWeight);
-  const expectedOutputWeight = toNumber(row.expectedOutputWeight);
-  const firstCrackTime = timeline.firstCrackTime || '';
-  const dropTime = timeline.dropTime || '';
+  const greenWeight = toNumber(row.greenWeight, toNumber(row.inputWeight));
+  const roastedWeight = toNumber(row.roastedWeight, toNumber(row.expectedOutputWeight));
+  const firstCrackTime = toStringValue(row.firstCrackTime);
+  const dropTime = toStringValue(row.dropTime);
   const steps = Array.isArray(timeline.steps)
     ? timeline.steps.map((step, index) => ({
         id: step.id || `step_${roastId}_${index}`,
         roastId,
-        time: step.time,
+        time: step.time || '00:00',
         heat: toNumber(step.heat),
         air: toNumber(step.air),
         memo: step.memo || '',
@@ -158,57 +155,73 @@ function normalizeRoast(row: AppsScriptRoastRow): { roast: Roast; steps: RoastSt
   return {
     roast: {
       id: roastId,
-      roastDate: String(row.roastDate || ''),
-      beanId: String(row.beanId || ''),
-      greenWeight: inputWeight,
-      roastedWeight: expectedOutputWeight,
-      yellowTime: '',
+      roastDate: toStringValue(row.roastDate),
+      beanId: toStringValue(row.beanId),
+      greenWeight,
+      roastedWeight,
+      yellowTime: toStringValue(row.yellowTime),
       firstCrackTime,
       dropTime,
-      developmentTime: calculateDevTime(firstCrackTime, dropTime),
-      developmentRatio: calculateDevRatio(firstCrackTime, dropTime),
-      lossRatio: calculateLossRatio(inputWeight, expectedOutputWeight),
-      status: timeline.status || DEFAULT_ROAST_STATUS,
-      notes: timeline.notes || (timeline.secondCrackTime ? `2nd Crack: ${timeline.secondCrackTime}` : ''),
-      createdAt: String(row.createdAt || new Date().toISOString()),
+      developmentTime: toStringValue(row.developmentTime) || calculateDevTime(firstCrackTime, dropTime),
+      developmentRatio: toNumber(row.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)),
+      lossRatio: toNumber(row.lossRatio, calculateLossRatio(greenWeight, roastedWeight)),
+      status: (toStringValue(row.status) || 'waiting_day7') as Roast['status'],
+      notes: toStringValue(row.notes),
+      createdAt: toStringValue(row.createdAt) || new Date().toISOString(),
     },
     steps,
   };
 }
 
-function beanToAppsScriptRow(bean: Bean): AppsScriptBeanRow {
+function beanToAppsScriptRow(bean: Bean): Record<string, unknown> {
   return {
     id: bean.id,
     name: bean.name,
     country: bean.country,
+    region: bean.region,
+    farm: bean.farm,
+    producer: bean.producer,
+    altitude: bean.altitude,
+    variety: bean.variety,
+    process: bean.process,
+    cropYear: bean.cropYear,
+    purchaseShop: bean.purchaseShop,
     purchaseDate: bean.purchaseDate,
-    stockWeight: bean.currentWeight,
+    purchasePrice: bean.purchasePrice,
+    initialWeight: bean.initialWeight,
+    currentWeight: bean.currentWeight,
     weightLossPercentage: bean.weightLossPercentage,
+    notes: bean.notes,
+    photoUrl: bean.photoUrl || '',
     createdAt: bean.createdAt,
     updatedAt: new Date().toISOString(),
   };
 }
 
-function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): AppsScriptRoastRow {
+function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): Record<string, unknown> {
   const roastSteps = steps
     .filter(step => step.roastId === roast.id)
     .sort((a, b) => a.time.localeCompare(b.time));
   const secondCrackMatch = roast.notes.match(/2nd Crack:\s*([0-9]{2}:[0-9]{2})/);
   const timelinePayload: RoastTimelinePayload = {
     steps: roastSteps,
-    firstCrackTime: roast.firstCrackTime,
     secondCrackTime: secondCrackMatch?.[1] || '',
-    dropTime: roast.dropTime,
-    notes: roast.notes,
-    status: roast.status,
   };
 
   return {
     id: roast.id,
     roastDate: roast.roastDate,
     beanId: roast.beanId,
-    inputWeight: roast.greenWeight,
-    expectedOutputWeight: roast.roastedWeight,
+    greenWeight: roast.greenWeight,
+    roastedWeight: roast.roastedWeight,
+    yellowTime: roast.yellowTime,
+    firstCrackTime: roast.firstCrackTime,
+    dropTime: roast.dropTime,
+    developmentTime: roast.developmentTime,
+    developmentRatio: roast.developmentRatio,
+    lossRatio: roast.lossRatio,
+    status: roast.status,
+    notes: roast.notes,
     timelineJson: JSON.stringify(timelinePayload),
     createdAt: roast.createdAt,
     updatedAt: new Date().toISOString(),
@@ -241,16 +254,11 @@ export async function readSheetsSnapshot(): Promise<SheetsSnapshot> {
 
 export async function writeSheetsSnapshot(snapshot: Partial<SheetsSnapshot>) {
   if (snapshot.beans) {
-    await Promise.all(snapshot.beans.map(bean => (
-      callAppsScript('updateBean', { bean: beanToAppsScriptRow(bean) })
-    )));
+    await Promise.all(snapshot.beans.map(bean => callAppsScript('updateBean', { bean: beanToAppsScriptRow(bean) })));
   }
-
   if (snapshot.roasts) {
     const steps = snapshot.steps || [];
-    await Promise.all(snapshot.roasts.map(roast => (
-      callAppsScript('updateRoast', { roast: roastToAppsScriptRow(roast, steps) })
-    )));
+    await Promise.all(snapshot.roasts.map(roast => callAppsScript('updateRoast', { roast: roastToAppsScriptRow(roast, steps) })));
   }
 }
 
@@ -270,4 +278,8 @@ export async function upsertRoast(roast: Roast, steps: RoastStep[]) {
 
 export async function deleteRoastFromSheet(id: string) {
   await callAppsScript('deleteRoast', { id });
+}
+
+export async function resetSheetsData() {
+  await callAppsScript('resetAll', {});
 }

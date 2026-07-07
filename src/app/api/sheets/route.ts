@@ -3,6 +3,7 @@ import {
   deleteBeanFromSheet,
   deleteRoastFromSheet,
   readSheetsSnapshot,
+  resetSheetsData,
   upsertBean,
   upsertRoast,
   writeSheetsSnapshot,
@@ -47,6 +48,11 @@ export async function POST(request: NextRequest) {
 
     if (action === 'deleteRoast') {
       await deleteRoastFromSheet(String(payload.id || ''));
+      return Response.json({ ok: true });
+    }
+
+    if (action === 'resetAll') {
+      await resetSheetsData();
       return Response.json({ ok: true });
     }
 
