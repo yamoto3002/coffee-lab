@@ -2,10 +2,12 @@ import { NextRequest } from 'next/server';
 import {
   deleteBeanFromSheet,
   deleteRoastFromSheet,
+  deleteTastingFromSheet,
   readSheetsSnapshot,
   resetSheetsData,
   upsertBean,
   upsertRoast,
+  upsertTasting,
   writeSheetsSnapshot,
 } from '@/lib/googleSheets';
 
@@ -51,6 +53,16 @@ export async function POST(request: NextRequest) {
       return Response.json({ ok: true });
     }
 
+    if (action === 'upsertTasting') {
+      const tasting = await upsertTasting(payload.tasting);
+      return Response.json({ ok: true, tasting });
+    }
+
+    if (action === 'deleteTasting') {
+      await deleteTastingFromSheet(String(payload.id || ''));
+      return Response.json({ ok: true });
+    }
+
     if (action === 'resetAll') {
       await resetSheetsData();
       return Response.json({ ok: true });
@@ -60,6 +72,7 @@ export async function POST(request: NextRequest) {
       beans: Array.isArray(payload.beans) ? payload.beans : undefined,
       roasts: Array.isArray(payload.roasts) ? payload.roasts : undefined,
       steps: Array.isArray(payload.steps) ? payload.steps : undefined,
+      tastings: Array.isArray(payload.tastings) ? payload.tastings : undefined,
     });
     return Response.json({ ok: true });
   } catch (error) {

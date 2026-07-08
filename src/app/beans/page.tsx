@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowUpRight, Edit2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { DBService, getAgingDays, getYearsSince } from '@/lib/db';
+import { formatDate, todayDateString } from '@/lib/date';
 import { AppSettings, Bean, Roast } from '@/types';
 
 type BeanFormValues = {
@@ -23,6 +24,7 @@ type BeanFormValues = {
   purchasePrice: string;
   initialWeight: string;
   weightLossPercentage: string;
+  themeColor: string;
   notes: string;
 };
 
@@ -60,10 +62,11 @@ const emptyForm = (): BeanFormValues => ({
   customProcess: '',
   cropYear: '',
   purchaseShop: '',
-  purchaseDate: new Date().toISOString().split('T')[0],
+  purchaseDate: todayDateString(),
   purchasePrice: '',
   initialWeight: '250',
   weightLossPercentage: '15',
+  themeColor: '#D09B6A',
   notes: '',
 });
 
@@ -156,6 +159,7 @@ export default function BeansPage() {
       purchasePrice: bean.purchasePrice ? String(bean.purchasePrice) : '',
       initialWeight: String(bean.initialWeight || ''),
       weightLossPercentage: String(bean.weightLossPercentage ?? 15),
+      themeColor: bean.themeColor || '#D09B6A',
       notes: bean.notes,
     });
     setIsModalOpen(true);
@@ -174,9 +178,7 @@ export default function BeansPage() {
     }
 
     const process = form.process === 'Other' ? form.customProcess.trim() || 'Other' : form.process;
-    const currentWeight = editingBean
-      ? Math.max(0, editingBean.currentWeight + (initialWeight - editingBean.initialWeight))
-      : initialWeight;
+    const currentWeight = initialWeight;
 
     const bean: Bean = {
       id: editingBean?.id ?? DBService.generateNextBeanId(),
@@ -195,6 +197,7 @@ export default function BeansPage() {
       initialWeight,
       currentWeight,
       weightLossPercentage: numberValue(form.weightLossPercentage, 15),
+      themeColor: form.themeColor,
       notes: form.notes.trim(),
       photoUrl: editingBean?.photoUrl || '',
       createdAt: editingBean?.createdAt || new Date().toISOString(),
@@ -298,7 +301,7 @@ export default function BeansPage() {
               const selected = bean.id === selectedBeanId;
               const ratio = bean.initialWeight > 0 ? bean.currentWeight / bean.initialWeight : 0;
               return (
-                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} className={`block w-full p-4 text-left transition ${selected ? 'bg-[#18181B]' : 'hover:bg-[#131315]'}`}>
+                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} style={{ borderLeftColor: bean.themeColor || '#D09B6A' }} className={`block w-full border-l-4 p-4 text-left transition ${selected ? 'bg-[#18181B]' : 'hover:bg-[#131315]'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -308,12 +311,12 @@ export default function BeansPage() {
                       <h2 className="mt-1 line-clamp-1 text-sm font-semibold text-[#F4F4F6]">{bean.name}</h2>
                       {settings.showProcess && <p className="mt-1 text-xs text-[#8E8E93]">{bean.process}</p>}
                     </div>
-                    <span className="rounded-md bg-[#D09B6A]/10 px-2 py-1 font-mono text-xs font-bold text-[#D09B6A]">-{bean.weightLossPercentage}%</span>
+                    <span className="rounded-md px-2 py-1 font-mono text-xs font-bold" style={{ backgroundColor: `${bean.themeColor || '#D09B6A'}22`, color: bean.themeColor || '#D09B6A' }}>-{bean.weightLossPercentage}%</span>
                   </div>
                   {settings.showStock && (
                     <div className="mt-3 space-y-1">
                       <div className="flex justify-between font-mono text-xs">
-                        <span className="text-[#8E8E93]">在庫</span>
+                        <span className="text-[#8E8E93]">参考量</span>
                         <span>{bean.currentWeight}g / {bean.initialWeight}g</span>
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-[#1C1C1F]">
@@ -365,8 +368,12 @@ export default function BeansPage() {
             <Field label="購入店" value={form.purchaseShop} onChange={value => updateForm('purchaseShop', value)} />
             <Field label="購入日" required type="date" value={form.purchaseDate} onChange={value => updateForm('purchaseDate', value)} />
             <Field label="購入価格(円)" type="number" inputMode="numeric" value={form.purchasePrice} onChange={value => updateForm('purchasePrice', value)} />
-            <Field label="内容量(g)" required type="number" inputMode="decimal" value={form.initialWeight} onChange={value => updateForm('initialWeight', value)} />
+            <Field label="登録参考量(g)" required type="number" inputMode="decimal" value={form.initialWeight} onChange={value => updateForm('initialWeight', value)} />
             <Field label="減耗率(%)" required type="number" inputMode="decimal" step="0.1" value={form.weightLossPercentage} onChange={value => updateForm('weightLossPercentage', value)} />
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-[#8E8E93]">テーマカラー</span>
+              <input type="color" value={form.themeColor} onChange={event => updateForm('themeColor', event.target.value)} className="h-11 w-full rounded-lg border border-[#232326] bg-[#1A1A1E] px-2 py-1" />
+            </label>
           </div>
 
           <label className="block space-y-1">
@@ -414,7 +421,7 @@ function BeanDetail({ bean, roasts, settings, onEdit, onDelete }: { bean: Bean; 
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="現在在庫" value={`${bean.currentWeight}g`} />
+        <Metric label="登録参考量" value={`${bean.currentWeight}g`} />
         <Metric label="購入量" value={`${bean.initialWeight}g`} />
         <Metric label="減耗率" value={`${bean.weightLossPercentage}%`} accent />
         <Metric label="鮮度メモ" value={freshness} />
@@ -424,7 +431,7 @@ function BeanDetail({ bean, roasts, settings, onEdit, onDelete }: { bean: Bean; 
         {settings.showProcess && <Info label="精製" value={bean.process || '-'} />}
         <Info label="品種" value={bean.variety || '-'} />
         <Info label="標高" value={bean.altitude ? `${bean.altitude}m` : '-'} />
-        <Info label="購入日" value={bean.purchaseDate || '-'} />
+        <Info label="購入日" value={formatDate(bean.purchaseDate)} />
         {settings.showPurchaseAge && <Info label="購入から" value={bean.purchaseDate ? `${Math.max(0, purchaseAge)}日` : '-'} />}
         {settings.showCropYear && <Info label="クロップ" value={bean.cropYear ? `Crop ${bean.cropYear}${cropAge !== null ? ` / 約${cropAge}年経過` : ''}` : '-'} />}
         {settings.showBeanDetails && <Info label="購入店" value={bean.purchaseShop || '-'} />}
@@ -449,12 +456,12 @@ function BeanDetail({ bean, roasts, settings, onEdit, onDelete }: { bean: Bean; 
             <div>
               <div className="flex items-center gap-2 text-xs text-[#8E8E93]">
                 <span className="font-mono text-[#D09B6A]">{roast.id}</span>
-                <span>{roast.roastDate}</span>
+                <span>{formatDate(roast.roastDate)}</span>
               </div>
               <div className="mt-1 flex gap-4 text-xs text-[#A1A1AA]">
                 <span>投入: <strong className="font-mono text-[#F4F4F6]">{roast.greenWeight}g</strong></span>
                 <span>焙煎後: <strong className="font-mono text-[#F4F4F6]">{roast.roastedWeight}g</strong></span>
-                <span>Dev: <strong className="font-mono text-[#F4F4F6]">{roast.developmentRatio}%</strong></span>
+                <span>Dev: <strong className="font-mono text-[#F4F4F6]">{roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`}</strong></span>
               </div>
             </div>
             <ArrowUpRight className="h-4 w-4 text-[#8E8E93]" />

@@ -18,6 +18,7 @@ const SHEETS = {
       'initialWeight',
       'currentWeight',
       'weightLossPercentage',
+      'themeColor',
       'notes',
       'photoUrl',
       'createdAt',
@@ -34,6 +35,7 @@ const SHEETS = {
       'roastedWeight',
       'yellowTime',
       'firstCrackTime',
+      'firstCrackStatus',
       'dropTime',
       'developmentTime',
       'developmentRatio',
@@ -41,6 +43,40 @@ const SHEETS = {
       'status',
       'notes',
       'timelineJson',
+      'createdAt',
+      'updatedAt',
+    ],
+  },
+  tastings: {
+    name: 'tastings',
+    headers: [
+      'id',
+      'roastId',
+      'tastingIndex',
+      'tastingDate',
+      'dayAfterRoast',
+      'tastingDay',
+      'doseGrams',
+      'score',
+      'fragrance',
+      'aroma',
+      'flavor',
+      'sweetness',
+      'acidityIntensity',
+      'acidityQuality',
+      'body',
+      'aftertaste',
+      'balance',
+      'cleanCup',
+      'overall',
+      'recommendationRating',
+      'flavors',
+      'negatives',
+      'improvements',
+      'impressionColor',
+      'notes',
+      'photos',
+      'status',
       'createdAt',
       'updatedAt',
     ],
@@ -68,6 +104,10 @@ function doGet(e) {
       return jsonResponse({ ok: true, roasts: getRowsAsObjects(SHEETS.roasts.name) });
     }
 
+    if (action === 'getTastings') {
+      return jsonResponse({ ok: true, tastings: getRowsAsObjects(SHEETS.tastings.name) });
+    }
+
     return jsonResponse({ ok: false, error: 'Unknown GET action: ' + action });
   } catch (error) {
     return jsonResponse({ ok: false, error: errorMessage(error) });
@@ -83,15 +123,10 @@ function doPost(e) {
     const body = parsePostBody(e);
     const action = String(body.action || '');
 
-    if (action === 'addBean') {
+    if (action === 'addBean' || action === 'updateBean') {
       const bean = normalizeBean(body.bean || body);
-      appendRow(SHEETS.beans.name, bean, true);
-      return jsonResponse({ ok: true, bean: bean });
-    }
-
-    if (action === 'updateBean') {
-      const bean = normalizeBean(body.bean || body);
-      upsertRow(SHEETS.beans.name, bean);
+      if (action === 'addBean') appendRow(SHEETS.beans.name, bean, true);
+      else upsertRow(SHEETS.beans.name, bean);
       return jsonResponse({ ok: true, bean: bean });
     }
 
@@ -100,26 +135,36 @@ function doPost(e) {
       return jsonResponse({ ok: true });
     }
 
-    if (action === 'addRoast') {
+    if (action === 'addRoast' || action === 'updateRoast') {
       const roast = normalizeRoast(body.roast || body);
-      appendRow(SHEETS.roasts.name, roast, true);
-      return jsonResponse({ ok: true, roast: roast });
-    }
-
-    if (action === 'updateRoast') {
-      const roast = normalizeRoast(body.roast || body);
-      upsertRow(SHEETS.roasts.name, roast);
+      if (action === 'addRoast') appendRow(SHEETS.roasts.name, roast, true);
+      else upsertRow(SHEETS.roasts.name, roast);
       return jsonResponse({ ok: true, roast: roast });
     }
 
     if (action === 'deleteRoast') {
-      deleteRowById(SHEETS.roasts.name, String(body.id || (body.roast && body.roast.id) || ''));
+      const id = String(body.id || (body.roast && body.roast.id) || '');
+      deleteRowById(SHEETS.roasts.name, id);
+      deleteRowsByColumn(SHEETS.tastings.name, 'roastId', id);
+      return jsonResponse({ ok: true });
+    }
+
+    if (action === 'addTasting' || action === 'updateTasting') {
+      const tasting = normalizeTasting(body.tasting || body);
+      if (action === 'addTasting') appendRow(SHEETS.tastings.name, tasting, true);
+      else upsertRow(SHEETS.tastings.name, tasting);
+      return jsonResponse({ ok: true, tasting: tasting });
+    }
+
+    if (action === 'deleteTasting') {
+      deleteRowById(SHEETS.tastings.name, String(body.id || (body.tasting && body.tasting.id) || ''));
       return jsonResponse({ ok: true });
     }
 
     if (action === 'resetAll') {
       clearDataRows(SHEETS.beans.name);
       clearDataRows(SHEETS.roasts.name);
+      clearDataRows(SHEETS.tastings.name);
       return jsonResponse({ ok: true });
     }
 
@@ -149,6 +194,7 @@ function parsePostBody(e) {
 function ensureSheets() {
   ensureSheet(SHEETS.beans.name, SHEETS.beans.headers);
   ensureSheet(SHEETS.roasts.name, SHEETS.roasts.headers);
+  ensureSheet(SHEETS.tastings.name, SHEETS.tastings.headers);
 }
 
 function ensureSheet(sheetName, desiredHeaders) {
@@ -207,7 +253,7 @@ function getRowsAsObjects(sheetName) {
       const item = {};
       headers.forEach(function(header, index) {
         if (!header) return;
-        item[header] = row[index] instanceof Date ? row[index].toISOString().slice(0, 10) : row[index];
+        item[header] = row[index] instanceof Date ? formatDateOnly(row[index]) : row[index];
       });
       return item;
     });
@@ -248,6 +294,23 @@ function deleteRowById(sheetName, id) {
   const rowNumber = findRowById(sheetName, id);
   if (rowNumber > 0) {
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName).deleteRow(rowNumber);
+  }
+}
+
+function deleteRowsByColumn(sheetName, columnName, value) {
+  if (!value) return;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) return;
+  const headers = getHeaders(sheetName);
+  const columnIndex = headers.indexOf(columnName) + 1;
+  if (columnIndex <= 0) return;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const values = sheet.getRange(2, columnIndex, lastRow - 1, 1).getValues();
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (String(values[index][0]) === String(value)) {
+      sheet.deleteRow(index + 2);
+    }
   }
 }
 
@@ -292,11 +355,12 @@ function normalizeBean(input) {
     process: String(input.process || 'Washed'),
     cropYear: String(input.cropYear || ''),
     purchaseShop: String(input.purchaseShop || ''),
-    purchaseDate: String(input.purchaseDate || ''),
+    purchaseDate: normalizeDateOnly(input.purchaseDate),
     purchasePrice: toNumber(input.purchasePrice),
     initialWeight: initialWeight,
     currentWeight: currentWeight,
     weightLossPercentage: toNumber(firstDefined(input.weightLossPercentage, 15)),
+    themeColor: String(input.themeColor || ''),
     notes: String(input.notes || ''),
     photoUrl: String(input.photoUrl || ''),
     createdAt: String(input.createdAt || now),
@@ -308,22 +372,75 @@ function normalizeRoast(input) {
   const now = new Date().toISOString();
   return {
     id: String(input.id || ''),
-    roastDate: String(input.roastDate || ''),
+    roastDate: normalizeDateOnly(input.roastDate),
     beanId: String(input.beanId || ''),
     greenWeight: toNumber(firstDefined(input.greenWeight, input.inputWeight)),
     roastedWeight: toNumber(firstDefined(input.roastedWeight, input.expectedOutputWeight)),
     yellowTime: String(input.yellowTime || ''),
     firstCrackTime: String(input.firstCrackTime || ''),
+    firstCrackStatus: String(input.firstCrackStatus || (input.firstCrackTime ? 'recorded' : 'unknown')),
     dropTime: String(input.dropTime || ''),
     developmentTime: String(input.developmentTime || ''),
-    developmentRatio: toNumber(input.developmentRatio),
+    developmentRatio: input.developmentRatio === '' || input.developmentRatio === null || input.developmentRatio === undefined ? '' : toNumber(input.developmentRatio),
     lossRatio: toNumber(input.lossRatio),
-    status: String(input.status || 'waiting_day7'),
+    status: String(input.status || 'roasted'),
     notes: String(input.notes || ''),
     timelineJson: String(input.timelineJson || '{"steps":[]}'),
     createdAt: String(input.createdAt || now),
     updatedAt: now,
   };
+}
+
+function normalizeTasting(input) {
+  const now = new Date().toISOString();
+  return {
+    id: String(input.id || ''),
+    roastId: String(input.roastId || ''),
+    tastingIndex: toNumber(firstDefined(input.tastingIndex, input.tastingDay, 1)),
+    tastingDate: normalizeDateOnly(input.tastingDate),
+    dayAfterRoast: toNumber(firstDefined(input.dayAfterRoast, input.tastingDay)),
+    tastingDay: toNumber(firstDefined(input.dayAfterRoast, input.tastingDay)),
+    doseGrams: toNumber(input.doseGrams),
+    score: toNumber(input.score),
+    fragrance: toNumber(input.fragrance),
+    aroma: toNumber(input.aroma),
+    flavor: toNumber(input.flavor),
+    sweetness: toNumber(input.sweetness),
+    acidityIntensity: toNumber(input.acidityIntensity),
+    acidityQuality: toNumber(input.acidityQuality),
+    body: toNumber(input.body),
+    aftertaste: toNumber(input.aftertaste),
+    balance: toNumber(input.balance),
+    cleanCup: toNumber(input.cleanCup),
+    overall: toNumber(input.overall),
+    recommendationRating: toNumber(input.recommendationRating),
+    flavors: String(input.flavors || '[]'),
+    negatives: String(input.negatives || '[]'),
+    improvements: String(input.improvements || ''),
+    impressionColor: String(input.impressionColor || '#D09B6A'),
+    notes: String(input.notes || ''),
+    photos: String(input.photos || '[]'),
+    status: String(input.status || 'completed'),
+    createdAt: String(input.createdAt || now),
+    updatedAt: now,
+  };
+}
+
+function normalizeDateOnly(value) {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return formatDateOnly(value);
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (!match) return raw;
+  return match[1] + '-' + pad2(match[2]) + '-' + pad2(match[3]);
+}
+
+function formatDateOnly(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
 }
 
 function firstDefined() {

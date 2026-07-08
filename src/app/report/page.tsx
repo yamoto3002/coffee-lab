@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { DBService } from '@/lib/db';
+import { formatDate, todayDateString } from '@/lib/date';
 import { Bean, Roast, Tasting } from '@/types';
 
 export default function ReportPage() {
@@ -18,7 +19,7 @@ export default function ReportPage() {
   }, []);
 
   const completedTastings = tastings.filter(tasting => tasting.status === 'completed');
-  const totalStock = beans.reduce((sum, bean) => sum + bean.currentWeight, 0);
+  const totalReferenceWeight = beans.reduce((sum, bean) => sum + bean.initialWeight, 0);
   const avgScore = useMemo(() => {
     if (completedTastings.length === 0) return null;
     return Math.round((completedTastings.reduce((sum, tasting) => sum + tasting.score, 0) / completedTastings.length) * 10) / 10;
@@ -46,12 +47,12 @@ export default function ReportPage() {
         <section className="space-y-3">
           <p className="text-sm uppercase tracking-[0.2em] text-[#8B6B51]">Coffee Lab Report</p>
           <h1 className="text-4xl font-bold tracking-normal">焙煎記録レポート</h1>
-          <p className="text-sm text-[#6E625A]">出力日: {new Date().toLocaleDateString('ja-JP')}</p>
+          <p className="text-sm text-[#6E625A]">出力日: {formatDate(todayDateString())}</p>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-4">
           <Metric label="登録生豆" value={`${beans.length} 件`} />
-          <Metric label="総在庫" value={`${totalStock.toLocaleString()}g`} />
+          <Metric label="登録参考量" value={`${totalReferenceWeight.toLocaleString()}g`} />
           <Metric label="焙煎ログ" value={`${roasts.length} 件`} />
           <Metric label="平均評価" value={avgScore === null ? '-' : `${avgScore}点`} />
         </section>
@@ -68,7 +69,7 @@ export default function ReportPage() {
                   <th>国</th>
                   <th>精製</th>
                   <th>Crop</th>
-                  <th className="text-right">在庫</th>
+                  <th className="text-right">参考量</th>
                 </tr>
               </thead>
               <tbody>
@@ -79,7 +80,7 @@ export default function ReportPage() {
                     <td>{bean.country}</td>
                     <td>{bean.process}</td>
                     <td>{bean.cropYear || '-'}</td>
-                    <td className="text-right font-mono">{bean.currentWeight}g</td>
+                    <td className="text-right font-mono">{bean.initialWeight}g</td>
                   </tr>
                 ))}
               </tbody>
@@ -107,11 +108,11 @@ export default function ReportPage() {
                 {roasts.map(roast => (
                   <tr key={roast.id} className="border-b border-[#E8DED4]">
                     <td className="py-2 font-mono">{roast.id}</td>
-                    <td>{roast.roastDate}</td>
+                    <td>{formatDate(roast.roastDate)}</td>
                     <td>{beanName(roast.beanId)}</td>
                     <td className="text-right font-mono">{roast.greenWeight}g</td>
                     <td className="text-right font-mono">{roast.roastedWeight}g</td>
-                    <td className="text-right font-mono">{roast.developmentRatio}%</td>
+                    <td className="text-right font-mono">{roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`}</td>
                     <td className="text-right font-mono">{roast.lossRatio}%</td>
                   </tr>
                 ))}
@@ -129,13 +130,13 @@ export default function ReportPage() {
                 <div key={tasting.id} className="rounded-lg border border-[#D8CFC5] bg-white/60 p-4">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-mono text-sm text-[#8B6B51]">{tasting.roastId} / Day {tasting.tastingDay}</p>
-                      <p className="text-xs text-[#6E625A]">{tasting.tastingDate}</p>
+                      <p className="font-mono text-sm text-[#8B6B51]">{tasting.roastId} / Day {tasting.dayAfterRoast}</p>
+                      <p className="text-xs text-[#6E625A]">{formatDate(tasting.tastingDate)}{tasting.doseGrams > 0 ? ` / ${tasting.doseGrams}g` : ''}</p>
                     </div>
                     <strong className="font-mono text-xl">{tasting.score}点</strong>
                   </div>
                   {tasting.flavors.length > 0 && <p className="mt-3 text-sm">Flavor: {tasting.flavors.join(', ')}</p>}
-                  {tasting.improvements && <p className="mt-2 text-sm text-[#6E625A]">{tasting.improvements}</p>}
+                  {tasting.notes && <p className="mt-2 text-sm text-[#6E625A]">{tasting.notes}</p>}
                 </div>
               ))}
             </div>

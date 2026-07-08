@@ -192,6 +192,8 @@ input:focus, select:focus, textarea:focus {
    ============================================= */
 button {
   min-height: 36px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* Large control buttons for Live Roast mode */
@@ -275,4 +277,11 @@ button {
    ============================================= */
 .bottom-nav-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
+}
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
 }

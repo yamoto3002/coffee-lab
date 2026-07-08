@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Beaker, CalendarCheck2, Coffee, Flame, PackageSearch, Plus, Sparkles } from 'lucide-react';
 import { DBService, getAgingDays } from '@/lib/db';
+import { formatDate, todayDateString } from '@/lib/date';
 import { AppSettings, Bean, Roast, Tasting } from '@/types';
 
 type Suggestion = {
@@ -28,8 +29,7 @@ export default function Home() {
 
   const suggestions = useMemo<Suggestion[]>(() => {
     const list: Suggestion[] = [];
-    const availableBeans = beans.filter(bean => bean.currentWeight > 0);
-    const lowStockBean = availableBeans.find(bean => bean.currentWeight < 100);
+    const availableBeans = beans.filter(bean => bean.initialWeight > 0);
     const leastUsedBean = [...availableBeans].sort((a, b) => {
       const aCount = roasts.filter(roast => roast.beanId === a.id).length;
       const bCount = roasts.filter(roast => roast.beanId === b.id).length;
@@ -38,14 +38,16 @@ export default function Home() {
     const dueRoast = roasts.find(roast => {
       const aging = getAgingDays(roast.roastDate);
       const roastTastings = tastings.filter(tasting => tasting.roastId === roast.id);
-      return aging >= 7 && !roastTastings.some(tasting => tasting.tastingDay === 7 && tasting.status === 'completed');
+      return aging >= 1 && roastTastings.length === 0;
     });
-    const latestRoast = [...roasts].sort((a, b) => new Date(b.roastDate).getTime() - new Date(a.roastDate).getTime())[0];
+    const latestRoast = [...roasts].sort((a, b) => b.roastDate.localeCompare(a.roastDate))[0];
+    const highScore = [...tastings].sort((a, b) => b.score - a.score)[0];
+    const firstCrackMissing = roasts.find(roast => !roast.firstCrackTime || roast.firstCrackStatus === 'not_detected');
 
     if (leastUsedBean) {
       list.push({
         title: '今日はこの豆を焙煎してみませんか？',
-        body: `${leastUsedBean.country} / ${leastUsedBean.name}。在庫は${leastUsedBean.currentWeight}gです。`,
+        body: `${leastUsedBean.country} / ${leastUsedBean.name}。最近の焙煎回数が少ない豆です。`,
         href: `/roasts/new?beanId=${leastUsedBean.id}`,
         icon: <Flame className="h-5 w-5" />,
       });
@@ -53,26 +55,36 @@ export default function Home() {
     if (dueRoast) {
       const bean = beans.find(item => item.id === dueRoast.beanId);
       list.push({
-        title: 'テイスティングのタイミングです',
-        body: `${dueRoast.id} は焙煎から${getAgingDays(dueRoast.roastDate)}日。味の変化を記録しましょう。`,
-        href: `/roasts/${dueRoast.id}/tasting/7`,
+        title: `${dueRoast.id} は焙煎から${getAgingDays(dueRoast.roastDate)}日目です`,
+        body: `まだテイスティングがありません。今日飲むなら変化を記録してみましょう。`,
+        href: `/roasts/${dueRoast.id}/tasting/new`,
         icon: <CalendarCheck2 className="h-5 w-5" />,
       });
       if (bean) list[list.length - 1].body += ` ${bean.name}`;
     }
-    if (lowStockBean) {
+    if (highScore) {
       list.push({
-        title: '在庫が減ってきた豆があります',
-        body: `${lowStockBean.name} は残り${lowStockBean.currentWeight}g。使い切りや補充を検討できます。`,
-        href: '/beans',
+        title: '前回評価が高かった記録があります',
+        body: `${highScore.roastId} は ${highScore.score}点。再現したい条件を詳細で確認できます。`,
+        href: `/roasts/${highScore.roastId}`,
         icon: <PackageSearch className="h-5 w-5" />,
       });
     }
     if (latestRoast) {
       list.push({
         title: '前回の焙煎から次の仮説へ',
-        body: `${latestRoast.id} のDevは${latestRoast.developmentRatio}%でした。次は少しだけ条件を振ってみるのも良さそうです。`,
+        body: latestRoast.developmentRatio === null
+          ? `${latestRoast.id} は1st Crackが不明です。次回は香り・煙・色もメモすると比較しやすくなります。`
+          : `${latestRoast.id} のDevは${latestRoast.developmentRatio}%でした。次は少しだけ条件を振ってみるのも良さそうです。`,
         href: `/roasts/${latestRoast.id}`,
+        icon: <Beaker className="h-5 w-5" />,
+      });
+    }
+    if (firstCrackMissing) {
+      list.push({
+        title: '1st Crack未検出の焙煎があります',
+        body: `${firstCrackMissing.id} はDev%を計算していません。次回は音以外の変化も記録してみましょう。`,
+        href: `/roasts/${firstCrackMissing.id}`,
         icon: <Beaker className="h-5 w-5" />,
       });
     }
@@ -80,7 +92,7 @@ export default function Home() {
     return list.slice(0, 4);
   }, [beans, roasts, tastings]);
 
-  const totalStock = beans.reduce((sum, bean) => sum + bean.currentWeight, 0);
+  const totalReferenceWeight = beans.reduce((sum, bean) => sum + bean.initialWeight, 0);
 
   return (
     <div className="min-h-screen bg-[#0B0B0C] text-[#F4F4F6]">
@@ -117,7 +129,7 @@ export default function Home() {
               <div className="flex h-full flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <span className="text-xs uppercase tracking-[0.2em] text-[#8E8E93]">Today</span>
-                  <span className="rounded-full bg-[#D09B6A]/15 px-3 py-1 text-xs text-[#D09B6A]">{new Date().toLocaleDateString('ja-JP')}</span>
+                  <span className="rounded-full bg-[#D09B6A]/15 px-3 py-1 text-xs text-[#D09B6A]">{formatDate(todayDateString())}</span>
                 </div>
                 <div className="space-y-5">
                   <div className="h-28 rounded-xl border border-[#D09B6A]/20 bg-[linear-gradient(180deg,rgba(208,155,106,0.22),rgba(208,155,106,0.04))] p-4">
@@ -129,7 +141,7 @@ export default function Home() {
                   <div className="grid grid-cols-3 gap-3">
                     <MiniStat label="Beans" value={String(beans.length)} />
                     <MiniStat label="Roasts" value={String(roasts.length)} />
-                    <MiniStat label="Stock" value={`${totalStock}g`} />
+                    <MiniStat label="Ref g" value={`${totalReferenceWeight}g`} />
                   </div>
                 </div>
               </div>

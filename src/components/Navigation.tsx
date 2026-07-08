@@ -49,7 +49,7 @@ export default function Navigation() {
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition',
+                  'relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition active:scale-[0.98]',
                   isActive ? 'bg-[#D09B6A]/10 text-[#D09B6A]' : 'text-[#8E8E93] hover:bg-[#131315] hover:text-[#F4F4F6]'
                 )}
               >
@@ -69,16 +69,16 @@ export default function Navigation() {
         </div>
       </aside>
 
-      <nav className="bottom-nav-safe fixed bottom-0 left-0 right-0 z-50 border-t border-[#232326] bg-[#0E0E10]/95 backdrop-blur md:hidden">
-        <div className="flex h-16 items-end justify-around px-2">
+      <nav className="bottom-nav-safe fixed inset-x-0 bottom-0 z-50 border-t border-[#232326] bg-[#0E0E10]/95 shadow-2xl shadow-black/40 backdrop-blur md:hidden">
+        <div className="grid h-16 grid-cols-6 items-end px-1">
           {navItems.slice(0, 2).map(item => <MobileItem key={item.href} item={item} pathname={pathname} />)}
-          <div className="relative flex h-full w-16 flex-none flex-col items-center justify-center">
-            <Link href="/roasts/new" className="-translate-y-3 rounded-2xl bg-[#D09B6A] p-3 shadow-lg shadow-[#D09B6A]/25 active:scale-90" aria-label="新規焙煎">
+          <div className="relative flex h-full flex-col items-center justify-center">
+            <Link href="/roasts/new" className="-translate-y-3 rounded-2xl bg-[#D09B6A] p-3 shadow-lg shadow-[#D09B6A]/25 transition active:scale-90" aria-label="新規焙煎">
               <Plus className="h-6 w-6 text-[#0B0B0C]" />
             </Link>
-            <span className="-translate-y-1 text-[9px] text-[#555558]">焙煎</span>
+            <span className="-translate-y-1 text-[9px] text-[#8E8E93]">新規</span>
           </div>
-          {navItems.slice(3).map(item => <MobileItem key={item.href} item={item} pathname={pathname} />)}
+          {navItems.slice(2).map(item => <MobileItem key={item.href} item={item} pathname={pathname} />)}
         </div>
       </nav>
     </>
@@ -89,11 +89,11 @@ function MobileItem({ item, pathname }: { item: typeof navItems[number]; pathnam
   const Icon = item.icon;
   const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
   return (
-    <Link href={item.href} className={clsx('flex h-full flex-1 flex-col items-center justify-center gap-0.5 pt-1 text-[10px] font-medium transition active:scale-90', isActive ? 'text-[#D09B6A]' : 'text-[#555558]')}>
+    <Link href={item.href} className={clsx('flex h-full min-w-0 flex-col items-center justify-center gap-0.5 pt-1 text-[10px] font-medium transition active:scale-90', isActive ? 'text-[#D09B6A]' : 'text-[#737373]')}>
       <div className={clsx('flex h-6 w-6 items-center justify-center rounded-lg', isActive ? 'bg-[#D09B6A]/15' : '')}>
         <Icon className="h-4 w-4" />
       </div>
-      <span>{item.label}</span>
+      <span className="max-w-full truncate">{item.label}</span>
     </Link>
   );
 }
