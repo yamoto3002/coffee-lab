@@ -1,13 +1,16 @@
-import { Bean, Roast, RoastStep } from '@/types';
+import { Bean, Roast, RoastStep, Tasting } from '@/types';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio } from '@/lib/db';
+import { normalizeDateOnly } from '@/lib/date';
 
 type AppsScriptJson = {
   ok?: boolean;
   error?: string;
   beans?: Record<string, unknown>[];
   roasts?: Record<string, unknown>[];
+  tastings?: Record<string, unknown>[];
   bean?: Record<string, unknown>;
   roast?: Record<string, unknown>;
+  tasting?: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -15,6 +18,7 @@ type SheetsSnapshot = {
   beans: Bean[];
   roasts: Roast[];
   steps: RoastStep[];
+  tastings: Tasting[];
 };
 
 type RoastTimelinePayload = {
@@ -57,17 +61,26 @@ function toStringValue(value: unknown) {
   return value === null || value === undefined ? '' : String(value);
 }
 
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 async function parseJsonResponse(response: Response): Promise<AppsScriptJson> {
   const text = await response.text();
   try {
     return JSON.parse(text) as AppsScriptJson;
   } catch {
-    const snippet = text.slice(0, 500);
-    console.error('Apps Script returned non-JSON response:', snippet);
-    if (/^\s*<!doctype html|^\s*<html/i.test(text)) {
-      throw new Error('Google Apps ScriptからJSONではない応答が返りました。URLまたは公開設定を確認してください。');
-    }
-    throw new Error('Google Apps ScriptからJSONではない応答が返りました。Apps ScriptのdoGet/doPostがJSONを返しているか確認してください。');
+    console.error('Apps Script returned non-JSON response:', text.slice(0, 500));
+    throw new Error('Google Apps ScriptからJSONではない応答が返りました。同期はバックグラウンドで再試行します。');
   }
 }
 
@@ -110,11 +123,12 @@ function normalizeBean(row: Record<string, unknown>): Bean {
     process: toStringValue(row.process) || 'Washed',
     cropYear: toStringValue(row.cropYear),
     purchaseShop: toStringValue(row.purchaseShop),
-    purchaseDate: toStringValue(row.purchaseDate),
+    purchaseDate: normalizeDateOnly(row.purchaseDate),
     purchasePrice: toNumber(row.purchasePrice),
     initialWeight,
     currentWeight,
     weightLossPercentage: toNumber(row.weightLossPercentage, 15),
+    themeColor: toStringValue(row.themeColor) || undefined,
     notes: toStringValue(row.notes),
     photoUrl: toStringValue(row.photoUrl),
     createdAt: toStringValue(row.createdAt) || new Date().toISOString(),
@@ -139,7 +153,7 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
   const timeline = parseTimelinePayload(row.timelineJson);
   const greenWeight = toNumber(row.greenWeight, toNumber(row.inputWeight));
   const roastedWeight = toNumber(row.roastedWeight, toNumber(row.expectedOutputWeight));
-  const firstCrackTime = toStringValue(row.firstCrackTime);
+  const firstCrackTime = toStringValue(row.firstCrackTime) || null;
   const dropTime = toStringValue(row.dropTime);
   const steps = Array.isArray(timeline.steps)
     ? timeline.steps.map((step, index) => ({
@@ -155,21 +169,63 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
   return {
     roast: {
       id: roastId,
-      roastDate: toStringValue(row.roastDate),
+      roastDate: normalizeDateOnly(row.roastDate),
       beanId: toStringValue(row.beanId),
       greenWeight,
       roastedWeight,
       yellowTime: toStringValue(row.yellowTime),
       firstCrackTime,
+      firstCrackStatus: (toStringValue(row.firstCrackStatus) || (firstCrackTime ? 'recorded' : 'unknown')) as Roast['firstCrackStatus'],
       dropTime,
-      developmentTime: toStringValue(row.developmentTime) || calculateDevTime(firstCrackTime, dropTime),
-      developmentRatio: toNumber(row.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)),
+      developmentTime: firstCrackTime ? (toStringValue(row.developmentTime) || calculateDevTime(firstCrackTime, dropTime)) : null,
+      developmentRatio: firstCrackTime ? toNullableNumber(row.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)) : null,
       lossRatio: toNumber(row.lossRatio, calculateLossRatio(greenWeight, roastedWeight)),
-      status: (toStringValue(row.status) || 'waiting_day7') as Roast['status'],
+      status: (toStringValue(row.status) || 'roasted') as Roast['status'],
       notes: toStringValue(row.notes),
       createdAt: toStringValue(row.createdAt) || new Date().toISOString(),
+      updatedAt: toStringValue(row.updatedAt) || undefined,
     },
     steps,
+  };
+}
+
+function toNullableNumber(value: unknown, fallback: number | null): number | null {
+  if (value === null || value === undefined || value === '') return fallback;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function normalizeTasting(row: Record<string, unknown>): Tasting {
+  return {
+    id: toStringValue(row.id),
+    roastId: toStringValue(row.roastId),
+    tastingIndex: toNumber(row.tastingIndex, toNumber(row.tastingDay, 1)),
+    tastingDay: toNumber(row.tastingDay, toNumber(row.dayAfterRoast)),
+    tastingDate: normalizeDateOnly(row.tastingDate),
+    dayAfterRoast: toNumber(row.dayAfterRoast, toNumber(row.tastingDay)),
+    doseGrams: toNumber(row.doseGrams),
+    fragrance: toNumber(row.fragrance),
+    aroma: toNumber(row.aroma),
+    flavor: toNumber(row.flavor),
+    sweetness: toNumber(row.sweetness),
+    acidityIntensity: toNumber(row.acidityIntensity),
+    acidityQuality: toNumber(row.acidityQuality),
+    body: toNumber(row.body),
+    aftertaste: toNumber(row.aftertaste),
+    balance: toNumber(row.balance),
+    cleanCup: toNumber(row.cleanCup),
+    overall: toNumber(row.overall),
+    score: toNumber(row.score),
+    recommendationRating: toNumber(row.recommendationRating),
+    flavors: toStringArray(row.flavors),
+    negatives: toStringArray(row.negatives),
+    improvements: toStringValue(row.improvements),
+    impressionColor: toStringValue(row.impressionColor) || '#D09B6A',
+    notes: toStringValue(row.notes),
+    photos: toStringArray(row.photos),
+    status: toStringValue(row.status) === 'pending' ? 'pending' : 'completed',
+    createdAt: toStringValue(row.createdAt) || new Date().toISOString(),
+    updatedAt: toStringValue(row.updatedAt) || undefined,
   };
 }
 
@@ -191,6 +247,7 @@ function beanToAppsScriptRow(bean: Bean): Record<string, unknown> {
     initialWeight: bean.initialWeight,
     currentWeight: bean.currentWeight,
     weightLossPercentage: bean.weightLossPercentage,
+    themeColor: bean.themeColor || '',
     notes: bean.notes,
     photoUrl: bean.photoUrl || '',
     createdAt: bean.createdAt,
@@ -215,10 +272,11 @@ function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): Record<string, 
     greenWeight: roast.greenWeight,
     roastedWeight: roast.roastedWeight,
     yellowTime: roast.yellowTime,
-    firstCrackTime: roast.firstCrackTime,
+    firstCrackTime: roast.firstCrackTime || '',
+    firstCrackStatus: roast.firstCrackStatus || (roast.firstCrackTime ? 'recorded' : 'unknown'),
     dropTime: roast.dropTime,
-    developmentTime: roast.developmentTime,
-    developmentRatio: roast.developmentRatio,
+    developmentTime: roast.developmentTime || '',
+    developmentRatio: roast.developmentRatio ?? '',
     lossRatio: roast.lossRatio,
     status: roast.status,
     notes: roast.notes,
@@ -228,14 +286,49 @@ function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): Record<string, 
   };
 }
 
+function tastingToAppsScriptRow(tasting: Tasting): Record<string, unknown> {
+  return {
+    id: tasting.id,
+    roastId: tasting.roastId,
+    tastingIndex: tasting.tastingIndex,
+    tastingDate: tasting.tastingDate,
+    dayAfterRoast: tasting.dayAfterRoast,
+    tastingDay: tasting.dayAfterRoast,
+    doseGrams: tasting.doseGrams,
+    score: tasting.score,
+    fragrance: tasting.fragrance,
+    aroma: tasting.aroma,
+    flavor: tasting.flavor,
+    sweetness: tasting.sweetness,
+    acidityIntensity: tasting.acidityIntensity,
+    acidityQuality: tasting.acidityQuality,
+    body: tasting.body,
+    aftertaste: tasting.aftertaste,
+    balance: tasting.balance,
+    cleanCup: tasting.cleanCup,
+    overall: tasting.overall,
+    recommendationRating: tasting.recommendationRating,
+    flavors: JSON.stringify(tasting.flavors || []),
+    negatives: JSON.stringify(tasting.negatives || []),
+    improvements: tasting.improvements,
+    impressionColor: tasting.impressionColor,
+    notes: tasting.notes,
+    photos: JSON.stringify(tasting.photos || []),
+    status: tasting.status,
+    createdAt: tasting.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function pingAppsScript() {
   return callAppsScript('ping');
 }
 
 export async function readSheetsSnapshot(): Promise<SheetsSnapshot> {
-  const [beansResponse, roastsResponse] = await Promise.all([
+  const [beansResponse, roastsResponse, tastingsResponse] = await Promise.all([
     callAppsScript('getBeans'),
     callAppsScript('getRoasts'),
+    callAppsScript('getTastings'),
   ]);
 
   const beans = Array.isArray(beansResponse.beans)
@@ -244,11 +337,15 @@ export async function readSheetsSnapshot(): Promise<SheetsSnapshot> {
   const parsedRoasts = Array.isArray(roastsResponse.roasts)
     ? roastsResponse.roasts.map(normalizeRoast).filter(item => item.roast.id)
     : [];
+  const tastings = Array.isArray(tastingsResponse.tastings)
+    ? tastingsResponse.tastings.map(normalizeTasting).filter(tasting => tasting.id && tasting.roastId && tasting.status === 'completed')
+    : [];
 
   return {
     beans,
     roasts: parsedRoasts.map(item => item.roast),
     steps: parsedRoasts.flatMap(item => item.steps),
+    tastings,
   };
 }
 
@@ -259,6 +356,9 @@ export async function writeSheetsSnapshot(snapshot: Partial<SheetsSnapshot>) {
   if (snapshot.roasts) {
     const steps = snapshot.steps || [];
     await Promise.all(snapshot.roasts.map(roast => callAppsScript('updateRoast', { roast: roastToAppsScriptRow(roast, steps) })));
+  }
+  if (snapshot.tastings) {
+    await Promise.all(snapshot.tastings.map(tasting => callAppsScript('updateTasting', { tasting: tastingToAppsScriptRow(tasting) })));
   }
 }
 
@@ -278,6 +378,15 @@ export async function upsertRoast(roast: Roast, steps: RoastStep[]) {
 
 export async function deleteRoastFromSheet(id: string) {
   await callAppsScript('deleteRoast', { id });
+}
+
+export async function upsertTasting(tasting: Tasting) {
+  const response = await callAppsScript('updateTasting', { tasting: tastingToAppsScriptRow(tasting) });
+  return response.tasting ? normalizeTasting(response.tasting) : tasting;
+}
+
+export async function deleteTastingFromSheet(id: string) {
+  await callAppsScript('deleteTasting', { id });
 }
 
 export async function resetSheetsData() {

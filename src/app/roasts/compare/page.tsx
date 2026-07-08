@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Star } from 'lucide-react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { DBService, secondsToTime, timeToSeconds } from '@/lib/db';
+import { formatDate } from '@/lib/date';
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
 
 function CompareContent() {
@@ -74,7 +75,7 @@ function CompareContent() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 pb-24">
+      <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 pb-28">
         <section className="rounded-xl border border-[#232326] bg-[#131315] p-5">
           <h2 className="mb-4 text-sm font-semibold text-[#F4F4F6]">火力・風量の重ね合わせ</h2>
           <div className="h-80">
@@ -105,7 +106,7 @@ function CompareContent() {
               <article key={roast.id} className="flex flex-col overflow-hidden rounded-xl border bg-[#131315]" style={{ borderColor: colors[index] }}>
                 <div className="border-b border-[#232326] px-5 py-4 text-center" style={{ backgroundColor: `${colors[index]}14` }}>
                   <span className="font-mono text-lg font-black" style={{ color: colors[index] }}>{roast.id}</span>
-                  <span className="mt-0.5 block text-xs text-[#8E8E93]">{roast.roastDate}</span>
+                  <span className="mt-0.5 block text-xs text-[#8E8E93]">{formatDate(roast.roastDate)}</span>
                 </div>
                 <div className="flex-1 space-y-5 p-5 text-sm">
                   <div>
@@ -115,26 +116,23 @@ function CompareContent() {
                   <div className="space-y-2 border-t border-[#232326] pt-4 font-mono text-xs">
                     <Row label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
                     <Row label="Loss" value={`${roast.lossRatio}%`} />
-                    <Row label="Dev" value={`${roast.developmentTime} / ${roast.developmentRatio}%`} accent />
-                    <Row label="1st / Drop" value={`${roast.firstCrackTime || '-'} / ${roast.dropTime || '-'}`} />
+                    <Row label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentTime} / ${roast.developmentRatio}%`} accent />
+                    <Row label="1st / Drop" value={`${roast.firstCrackTime || '不明'} / ${roast.dropTime || '-'}`} />
                   </div>
                   <div className="space-y-3 border-t border-[#232326] pt-4">
-                    {[7, 10, 14].map(day => {
-                      const tasting = tastings.find(item => item.tastingDay === day);
-                      return (
-                        <div key={day} className="rounded-lg bg-[#1A1A1E] p-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-[#8E8E93]">Day {day}</span>
-                            {tasting ? <strong className="font-mono text-[#D09B6A]">{tasting.score}点</strong> : <span className="text-xs text-[#8E8E93]">未評価</span>}
-                          </div>
-                          {tasting && (
-                            <div className="mt-2 flex text-[#D09B6A]">
-                              {Array.from({ length: tasting.recommendationRating }).map((_, starIndex) => <Star key={starIndex} className="h-3 w-3 fill-current" />)}
-                            </div>
-                          )}
+                    {tastings.length === 0 ? (
+                      <p className="rounded-lg bg-[#1A1A1E] p-3 text-xs text-[#8E8E93]">テイスティングなし</p>
+                    ) : tastings.map(tasting => (
+                      <div key={tasting.id} className="rounded-lg bg-[#1A1A1E] p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-[#8E8E93]">#{tasting.tastingIndex} / Day {tasting.dayAfterRoast}</span>
+                          <strong className="font-mono text-[#D09B6A]">{tasting.score}点</strong>
                         </div>
-                      );
-                    })}
+                        <div className="mt-2 flex text-[#D09B6A]">
+                          {Array.from({ length: tasting.recommendationRating }).map((_, starIndex) => <Star key={starIndex} className="h-3 w-3 fill-current" />)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="border-t border-[#232326] p-4">

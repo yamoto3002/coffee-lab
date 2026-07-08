@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowLeft, Clock, Flame, Play, RotateCcw, Save, Square, 
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Bean, Roast, RoastStep } from '@/types';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio, DBService, secondsToTime, timeToSeconds } from '@/lib/db';
+import { todayDateString } from '@/lib/date';
 
 type TabMode = 'live' | 'manual';
 type Phase = 'idle' | 'drying' | 'crack' | 'development' | 'drop';
@@ -21,6 +22,7 @@ type TimelineEntry = {
 
 type RoastDraftOverrides = {
   firstCrackTime: string;
+  firstCrackStatus: Roast['firstCrackStatus'];
   secondCrackTime: string;
   dropTime: string;
 };
@@ -46,10 +48,12 @@ function NewRoastContent() {
   const [syncStatus, setSyncStatus] = useState('ローカル準備完了');
   const [syncError, setSyncError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showFirstCrackChoice, setShowFirstCrackChoice] = useState(false);
+  const [estimatedFirstCrack, setEstimatedFirstCrack] = useState('');
 
   const [roastId] = useState(() => DBService.generateNextRoastId());
   const [beanId, setBeanId] = useState(() => preselectedBeanId || DBService.getBeans()[0]?.id || '');
-  const [roastDate, setRoastDate] = useState(new Date().toISOString().split('T')[0]);
+  const [roastDate, setRoastDate] = useState(todayDateString());
   const [greenWeightInput, setGreenWeightInput] = useState('200');
   const [notes, setNotes] = useState('');
 
@@ -60,6 +64,7 @@ function NewRoastContent() {
   const [liveHeat, setLiveHeat] = useState(7);
   const [liveAir, setLiveAir] = useState(2);
   const [firstCrackTime, setFirstCrackTime] = useState('');
+  const [firstCrackStatus, setFirstCrackStatus] = useState<Roast['firstCrackStatus']>('unknown');
   const [secondCrackTime, setSecondCrackTime] = useState('');
   const [dropTime, setDropTime] = useState('');
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -88,7 +93,6 @@ function NewRoastContent() {
   const lossRatio = calculateLossRatio(greenWeight, predictedRoastedWeight);
   const devTime = calculateDevTime(firstCrackTime, dropTime);
   const devRatio = calculateDevRatio(firstCrackTime, dropTime);
-  const isOverStock = !!selectedBean && greenWeight > selectedBean.currentWeight;
   const currentTime = secondsToTime(elapsedSecs);
 
   const loadLocalData = useCallback(() => {
@@ -147,6 +151,7 @@ function NewRoastContent() {
     const draftFirstCrackTime = overrides.firstCrackTime ?? firstCrackTime;
     const draftSecondCrackTime = overrides.secondCrackTime ?? secondCrackTime;
     const draftDropTime = overrides.dropTime ?? dropTime;
+    const draftFirstCrackStatus = overrides.firstCrackStatus ?? firstCrackStatus;
 
     return {
       id: roastId,
@@ -156,6 +161,7 @@ function NewRoastContent() {
       roastedWeight: predictedRoastedWeight,
       yellowTime: '',
       firstCrackTime: draftFirstCrackTime,
+      firstCrackStatus: draftFirstCrackStatus,
       dropTime: draftDropTime,
       developmentTime: calculateDevTime(draftFirstCrackTime, draftDropTime),
       developmentRatio: calculateDevRatio(draftFirstCrackTime, draftDropTime),
@@ -164,7 +170,7 @@ function NewRoastContent() {
       notes: [notes, draftSecondCrackTime ? `2nd Crack: ${draftSecondCrackTime}` : ''].filter(Boolean).join('\n'),
       createdAt: new Date().toISOString(),
     };
-  }, [beanId, dropTime, firstCrackTime, greenWeight, notes, predictedRoastedWeight, roastDate, roastId, secondCrackTime]);
+  }, [beanId, dropTime, firstCrackStatus, firstCrackTime, greenWeight, notes, predictedRoastedWeight, roastDate, roastId, secondCrackTime]);
 
   const queueBackgroundSync = useCallback((steps: TimelineEntry[], draftOverrides: Partial<RoastDraftOverrides> = {}) => {
     void steps;
@@ -212,6 +218,7 @@ function NewRoastContent() {
     setLiveHeat(7);
     setLiveAir(2);
     setFirstCrackTime('');
+    setFirstCrackStatus('unknown');
     setSecondCrackTime('');
     setDropTime('');
     setTimeline([]);
@@ -231,9 +238,15 @@ function NewRoastContent() {
 
   const recordMilestone = (label: string, field: MilestoneField) => {
     if (!hasStarted) return;
+    if (field === 'dropTime' && !firstCrackTime) {
+      setEstimatedFirstCrack(secondsToTime(Math.max(0, elapsedSecs - 90)));
+      setShowFirstCrackChoice(true);
+      return;
+    }
     const time = currentTime;
     if (field === 'firstCrackTime') {
       setFirstCrackTime(time);
+      setFirstCrackStatus('recorded');
       setPhase('crack');
     }
     if (field === 'secondCrackTime') {
@@ -246,11 +259,27 @@ function NewRoastContent() {
       setIsRunning(false);
     }
     const draftOverrides: Partial<RoastDraftOverrides> = {};
-    if (field === 'firstCrackTime') draftOverrides.firstCrackTime = time;
+    if (field === 'firstCrackTime') {
+      draftOverrides.firstCrackTime = time;
+      draftOverrides.firstCrackStatus = 'recorded';
+    }
     if (field === 'secondCrackTime') draftOverrides.secondCrackTime = time;
     if (field === 'dropTime') draftOverrides.dropTime = time;
 
     upsertTimeline({ time, heat: liveHeat, air: liveAir, memo: label }, draftOverrides);
+  };
+
+  const completeDropWithoutFirstCrack = (status: 'not_detected' | 'estimated' | 'unknown') => {
+    const drop = currentTime;
+    const nextFirstCrack = status === 'estimated' ? estimatedFirstCrack : '';
+    setFirstCrackTime(nextFirstCrack);
+    setFirstCrackStatus(status);
+    setDropTime(drop);
+    setPhase('drop');
+    setIsRunning(false);
+    setShowFirstCrackChoice(false);
+    const draftOverrides: Partial<RoastDraftOverrides> = { firstCrackTime: nextFirstCrack, firstCrackStatus: status, dropTime: drop };
+    upsertTimeline({ time: drop, heat: liveHeat, air: liveAir, memo: status === 'not_detected' ? 'Drop / 1st Crack not detected' : 'Drop' }, draftOverrides);
   };
 
   const addManualStep = () => {
@@ -282,26 +311,22 @@ function NewRoastContent() {
       alert('使用する生豆を選択してください。');
       return;
     }
-    if (isOverStock && !confirm(`投入量 ${greenWeight}g が在庫 ${selectedBean!.currentWeight}g を超えています。保存しますか？`)) return;
-
     const finalRoast = buildDraftRoast();
     const finalSteps: RoastStep[] = timeline.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId }));
     setIsSaving(true);
     setSyncError('');
     DBService.saveRoast(finalRoast, finalSteps, false);
     const result = await DBService.saveRoastToCloud(finalRoast, finalSteps);
-    const updatedBean = DBService.getBeanById(beanId);
-    const beanResult = updatedBean ? await DBService.saveBeanToCloud(updatedBean) : { ok: true };
     setIsSaving(false);
 
-    if (result.ok && beanResult.ok) {
+    if (result.ok) {
       setSyncStatus('Google Sheetsへ保存済み');
       router.push(`/roasts/${roastId}`);
       return;
     }
 
     setSyncStatus('保存失敗（ローカルには保持）');
-    setSyncError(result.error || beanResult.error || 'Googleスプレッドシートへの保存に失敗しました。通信環境を確認してください。');
+    setSyncError(result.error || 'Google Sheetsとの同期に失敗しました。ローカルに保存し、バックグラウンドで再試行します。');
   };
 
   const retryPendingSync = async () => {
@@ -376,24 +401,24 @@ function NewRoastContent() {
                   {beans.map(bean => <option key={bean.id} value={bean.id}>[{bean.id}] {bean.country} - {bean.name}</option>)}
                 </select>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="space-y-1 block">
                   <span className="text-xs text-[#8E8E93]">焙煎日</span>
                   <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 text-sm" />
                 </label>
                 <label className="space-y-1 block">
                   <span className="text-xs text-[#8E8E93]">投入量(g)</span>
-                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className={`w-full rounded-xl border bg-[#1A1A1E] px-3 py-3 font-mono text-sm ${isOverStock ? 'border-[#EF4444]' : 'border-[#232326]'}`} />
+                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 font-mono text-sm" />
                 </label>
               </div>
               {selectedBean && (
                 <div className="rounded-xl border border-[#232326] bg-[#1A1A1E] p-3 text-xs text-[#A1A1AA]">
-                  <div className="flex justify-between"><span>在庫</span><strong className="font-mono text-[#F4F4F6]">{selectedBean.currentWeight}g</strong></div>
+                  <div className="flex justify-between"><span>登録参考量</span><strong className="font-mono text-[#F4F4F6]">{selectedBean.currentWeight}g</strong></div>
                   <div className="flex justify-between"><span>減耗率</span><strong className="font-mono text-[#D09B6A]">{selectedBean.weightLossPercentage}%</strong></div>
                   <div className="mt-2 flex justify-between border-t border-[#232326] pt-2"><span>予想焙煎後重量</span><strong className="font-mono text-lg text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>
                 </div>
               )}
-              {isOverStock && <p className="flex items-center gap-1 text-xs text-[#EF4444]"><AlertTriangle className="h-3 w-3" />在庫を超えています</p>}
+              <p className="flex items-center gap-1 text-xs text-[#8E8E93]"><AlertTriangle className="h-3 w-3" />生豆量は自動増減しません。投入量だけ焙煎バッチに記録します。</p>
             </Panel>
 
             <Panel title="タイマー">
@@ -452,8 +477,8 @@ function NewRoastContent() {
           <section className="space-y-4">
             <div className="grid grid-cols-3 gap-2">
               <Stat label="Loss" value={`${lossRatio}%`} />
-              <Stat label="Dev" value={devTime} />
-              <Stat label="Dev%" value={`${devRatio}%`} />
+              <Stat label="Dev" value={devTime || '不明'} />
+              <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
             </div>
 
             <Panel title="タイムライン">
@@ -501,6 +526,34 @@ function NewRoastContent() {
             </div>
           </Panel>
         </main>
+      )}
+      {showFirstCrackChoice && (
+        <div className="fixed inset-0 z-[60] flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
+          <div className="w-full max-w-md rounded-2xl border border-[#3A2A1E] bg-[#131315] p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-[#F4F4F6]">1st Crackが未記録です</h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#A1A1AA]">
+              Dev%は0ではなく「不明」として扱えます。聞こえなかった場合は、次回メモに香り・煙・色の変化も残すと比較しやすくなります。
+            </p>
+            <div className="mt-4 space-y-2">
+              <button type="button" onClick={() => completeDropWithoutFirstCrack('not_detected')} className="w-full rounded-xl border border-[#232326] bg-[#1C1C1F] px-4 py-3 text-left text-sm font-semibold active:scale-[0.99]">
+                1st Crackは聞こえなかった
+              </button>
+              <label className="block rounded-xl border border-[#232326] bg-[#1C1C1F] p-3">
+                <span className="text-xs text-[#8E8E93]">だいたいの時刻を入力</span>
+                <div className="mt-2 flex gap-2">
+                  <input value={estimatedFirstCrack} onChange={event => setEstimatedFirstCrack(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-[#232326] bg-[#0B0B0C] px-3 py-2 font-mono text-sm" />
+                  <button type="button" onClick={() => completeDropWithoutFirstCrack('estimated')} className="rounded-lg bg-[#D09B6A] px-3 py-2 text-sm font-bold text-[#0B0B0C]">採用</button>
+                </div>
+              </label>
+              <button type="button" onClick={() => completeDropWithoutFirstCrack('unknown')} className="w-full rounded-xl border border-[#232326] bg-[#1C1C1F] px-4 py-3 text-left text-sm font-semibold active:scale-[0.99]">
+                このまま不明として保存
+              </button>
+              <button type="button" onClick={() => setShowFirstCrackChoice(false)} className="w-full rounded-xl px-4 py-3 text-sm text-[#8E8E93]">
+                戻る
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, ChevronRight, Columns, Flame, Search, Star } from 'lucide-react';
+import { Calendar, ChevronRight, Columns, Flame, Search, Star, Trash2 } from 'lucide-react';
 import { DBService, getAgingDays } from '@/lib/db';
+import { formatDate } from '@/lib/date';
 import { Bean, Roast, Tasting } from '@/types';
 
 export default function RoastsPage() {
@@ -34,11 +35,11 @@ export default function RoastsPage() {
     });
 
     return [...filtered].sort((a, b) => {
-      if (sortBy === 'date-asc') return new Date(a.roastDate).getTime() - new Date(b.roastDate).getTime();
-      if (sortBy === 'dev-desc') return b.developmentRatio - a.developmentRatio;
+      if (sortBy === 'date-asc') return a.roastDate.localeCompare(b.roastDate);
+      if (sortBy === 'dev-desc') return (b.developmentRatio ?? -1) - (a.developmentRatio ?? -1);
       if (sortBy === 'loss-desc') return b.lossRatio - a.lossRatio;
       if (sortBy === 'score-desc') return maxScore(b.id) - maxScore(a.id);
-      return new Date(b.roastDate).getTime() - new Date(a.roastDate).getTime();
+      return b.roastDate.localeCompare(a.roastDate);
     });
   }, [roasts, beans, searchQuery, statusFilter, beanFilter, sortBy, tastings]);
 
@@ -58,6 +59,15 @@ export default function RoastsPage() {
       }
       return [...current, id];
     });
+  };
+
+  const deleteRoast = async (roast: Roast) => {
+    if (!confirm(`焙煎記録 ${roast.id} を削除しますか？生豆の参考量は変更しません。`)) return;
+    DBService.deleteRoast(roast.id, false);
+    setRoasts(DBService.getRoasts());
+    setTastings(DBService.getTastings());
+    const result = await DBService.deleteRoastFromCloud(roast.id);
+    if (!result.ok) alert(result.error || 'ローカルでは削除しました。Google Sheetsへはバックグラウンドで再試行します。');
   };
 
   return (
@@ -130,6 +140,11 @@ export default function RoastsPage() {
                     {selected ? '選択中' : '選択'}
                   </button>
                 )}
+                {!compareMode && (
+                  <button type="button" onClick={() => void deleteRoast(roast)} className="absolute right-3 top-3 z-10 rounded-lg bg-[#0B0B0C]/80 p-2 text-[#8E8E93] transition hover:text-[#EF4444] active:scale-90" aria-label="焙煎記録を削除">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
                 <Link href={compareMode ? '#' : `/roasts/${roast.id}`} onClick={event => { if (compareMode) { event.preventDefault(); toggleCompare(roast.id); } }} className="grid gap-0 sm:grid-cols-[150px_1fr_170px_48px]">
                   <div className={`flex flex-col items-center justify-center border-b border-[#232326] px-4 py-5 sm:border-b-0 sm:border-r ${compareMode ? 'pt-12 sm:pt-5' : ''}`}>
                     <span className="font-mono text-lg font-bold text-[#D09B6A]">{roast.id}</span>
@@ -139,14 +154,14 @@ export default function RoastsPage() {
                     <div>
                       <div className="mb-1 flex items-center gap-2 text-xs text-[#8E8E93]">
                         <Calendar className="h-3.5 w-3.5" />
-                        <span className="font-mono">{roast.roastDate}</span>
+                        <span className="font-mono">{formatDate(roast.roastDate)}</span>
                       </div>
                       <h2 className="font-bold text-[#F4F4F6]">{beanName(roast.beanId)}</h2>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs font-mono text-[#A1A1AA]">
                       <Mini label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
                       <Mini label="Loss" value={`${roast.lossRatio}%`} />
-                      <Mini label="Dev" value={`${roast.developmentRatio}%`} accent />
+                      <Mini label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} accent />
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-[#232326] p-4 sm:flex-col sm:items-start sm:justify-center sm:border-l sm:border-t-0">
