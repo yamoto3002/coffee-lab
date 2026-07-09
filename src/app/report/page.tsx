@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { DBService } from '@/lib/db';
@@ -12,14 +12,19 @@ export default function ReportPage() {
   const [roasts, setRoasts] = useState<Roast[]>([]);
   const [tastings, setTastings] = useState<Tasting[]>([]);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setBeans(DBService.getBeans());
     setRoasts(DBService.getRoasts());
     setTastings(DBService.getTastings());
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(load, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
   const completedTastings = tastings.filter(tasting => tasting.status === 'completed');
-  const totalReferenceWeight = beans.reduce((sum, bean) => sum + bean.initialWeight, 0);
+  const totalPurchaseWeight = beans.reduce((sum, bean) => sum + bean.initialWeight, 0);
   const avgScore = useMemo(() => {
     if (completedTastings.length === 0) return null;
     return Math.round((completedTastings.reduce((sum, tasting) => sum + tasting.score, 0) / completedTastings.length) * 10) / 10;
@@ -51,9 +56,9 @@ export default function ReportPage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-4">
-          <Metric label="登録生豆" value={`${beans.length} 件`} />
-          <Metric label="登録参考量" value={`${totalReferenceWeight.toLocaleString()}g`} />
-          <Metric label="焙煎ログ" value={`${roasts.length} 件`} />
+          <Metric label="生豆" value={`${beans.length}件`} />
+          <Metric label="購入量合計" value={`${totalPurchaseWeight.toLocaleString()}g`} />
+          <Metric label="焙煎ログ" value={`${roasts.length}件`} />
           <Metric label="平均評価" value={avgScore === null ? '-' : `${avgScore}点`} />
         </section>
 
@@ -61,26 +66,18 @@ export default function ReportPage() {
           {beans.length === 0 ? (
             <Empty text="生豆データがありません。" />
           ) : (
-            <table className="w-full border-collapse text-sm">
+            <table className="report-table">
               <thead>
-                <tr className="border-b border-[#D8CFC5] text-left text-[#6E625A]">
-                  <th className="py-2">ID</th>
-                  <th>名前</th>
-                  <th>国</th>
-                  <th>精製</th>
-                  <th>Crop</th>
-                  <th className="text-right">参考量</th>
-                </tr>
+                <tr><th>ID</th><th>生豆</th><th>精製</th><th>購入日</th><th>購入量</th></tr>
               </thead>
               <tbody>
                 {beans.map(bean => (
-                  <tr key={bean.id} className="border-b border-[#E8DED4]">
-                    <td className="py-2 font-mono">{bean.id}</td>
-                    <td>{bean.name}</td>
-                    <td>{bean.country}</td>
+                  <tr key={bean.id}>
+                    <td>{bean.id}</td>
+                    <td>{bean.country} / {bean.name}</td>
                     <td>{bean.process}</td>
-                    <td>{bean.cropYear || '-'}</td>
-                    <td className="text-right font-mono">{bean.initialWeight}g</td>
+                    <td>{formatDate(bean.purchaseDate)}</td>
+                    <td>{bean.initialWeight}g</td>
                   </tr>
                 ))}
               </tbody>
@@ -90,30 +87,25 @@ export default function ReportPage() {
 
         <ReportSection title="焙煎ログ">
           {roasts.length === 0 ? (
-            <Empty text="焙煎ログがありません。" />
+            <Empty text="焙煎記録がありません。" />
           ) : (
-            <table className="w-full border-collapse text-sm">
+            <table className="report-table">
               <thead>
-                <tr className="border-b border-[#D8CFC5] text-left text-[#6E625A]">
-                  <th className="py-2">ID</th>
-                  <th>焙煎日</th>
-                  <th>生豆</th>
-                  <th className="text-right">投入</th>
-                  <th className="text-right">焙煎後</th>
-                  <th className="text-right">Dev</th>
-                  <th className="text-right">Loss</th>
-                </tr>
+                <tr><th>ID</th><th>日付</th><th>生豆</th><th>投入</th><th>焙煎後</th><th>Loss</th><th>1st</th><th>2nd</th><th>Drop</th><th>Dev</th></tr>
               </thead>
               <tbody>
                 {roasts.map(roast => (
-                  <tr key={roast.id} className="border-b border-[#E8DED4]">
-                    <td className="py-2 font-mono">{roast.id}</td>
+                  <tr key={roast.id}>
+                    <td>{roast.id}</td>
                     <td>{formatDate(roast.roastDate)}</td>
                     <td>{beanName(roast.beanId)}</td>
-                    <td className="text-right font-mono">{roast.greenWeight}g</td>
-                    <td className="text-right font-mono">{roast.roastedWeight}g</td>
-                    <td className="text-right font-mono">{roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`}</td>
-                    <td className="text-right font-mono">{roast.lossRatio}%</td>
+                    <td>{roast.greenWeight}g</td>
+                    <td>{roast.roastedWeight}g</td>
+                    <td>{roast.lossRatio}%</td>
+                    <td>{roast.firstCrackTime || '-'}</td>
+                    <td>{roast.secondCrackTime || '-'}</td>
+                    <td>{roast.dropTime || '-'}</td>
+                    <td>{roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -123,34 +115,58 @@ export default function ReportPage() {
 
         <ReportSection title="テイスティング">
           {completedTastings.length === 0 ? (
-            <Empty text="テイスティング結果がありません。" />
+            <Empty text="テイスティング記録がありません。" />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {completedTastings.map(tasting => (
-                <div key={tasting.id} className="rounded-lg border border-[#D8CFC5] bg-white/60 p-4">
-                  <div className="flex items-start justify-between">
+                <div key={tasting.id} className="rounded-xl border border-[#D8CFC5] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-mono text-sm text-[#8B6B51]">{tasting.roastId} / Day {tasting.dayAfterRoast}</p>
+                      <p className="font-mono text-sm font-bold">{tasting.roastId} / Day {tasting.dayAfterRoast}</p>
                       <p className="text-xs text-[#6E625A]">{formatDate(tasting.tastingDate)}{tasting.doseGrams > 0 ? ` / ${tasting.doseGrams}g` : ''}</p>
                     </div>
-                    <strong className="font-mono text-xl">{tasting.score}点</strong>
+                    <strong className="font-mono text-2xl" style={{ color: tasting.impressionColor }}>{tasting.score}</strong>
                   </div>
-                  {tasting.flavors.length > 0 && <p className="mt-3 text-sm">Flavor: {tasting.flavors.join(', ')}</p>}
-                  {tasting.notes && <p className="mt-2 text-sm text-[#6E625A]">{tasting.notes}</p>}
+                  {tasting.flavors.length > 0 && <p className="mt-3 text-sm text-[#3D3027]">{tasting.flavors.join(', ')}</p>}
+                  {tasting.notes && <p className="mt-2 text-xs leading-relaxed text-[#6E625A]">{tasting.notes}</p>}
                 </div>
               ))}
             </div>
           )}
         </ReportSection>
       </main>
+
+      <style jsx global>{`
+        .report-table {
+          width: 100%;
+          border-collapse: collapse;
+          background: white;
+          border: 1px solid #D8CFC5;
+          border-radius: 10px;
+          overflow: hidden;
+          font-size: 12px;
+        }
+        .report-table th,
+        .report-table td {
+          border-bottom: 1px solid #E8DDD2;
+          padding: 10px;
+          text-align: left;
+          vertical-align: top;
+        }
+        .report-table th {
+          color: #6E625A;
+          background: #EFE7DE;
+          font-weight: 700;
+        }
+      `}</style>
     </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#D8CFC5] bg-white/60 p-4">
-      <span className="block text-xs text-[#6E625A]">{label}</span>
+    <div className="rounded-xl border border-[#D8CFC5] bg-white p-4">
+      <span className="text-xs text-[#6E625A]">{label}</span>
       <strong className="mt-1 block font-mono text-2xl">{value}</strong>
     </div>
   );
@@ -158,7 +174,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-lg border border-[#D8CFC5] bg-white/50 p-5 print:border-[#BBBBBB]">
+    <section className="space-y-3">
       <h2 className="text-xl font-bold">{title}</h2>
       {children}
     </section>
@@ -166,5 +182,5 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="rounded-lg border border-dashed border-[#D8CFC5] p-6 text-center text-sm text-[#6E625A]">{text}</p>;
+  return <div className="rounded-xl border border-dashed border-[#D8CFC5] p-8 text-center text-sm text-[#6E625A]">{text}</div>;
 }

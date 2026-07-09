@@ -1,34 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  /* Dark gray Obsidian/Linear style theme by default */
-  --background: #0B0B0C;
+  --background: #080E14;
   --foreground: #F4F4F6;
   
-  --card: #131315;
+  --card: #111827;
   --card-foreground: #F4F4F6;
   
-  --popover: #131315;
+  --popover: #111827;
   --popover-foreground: #F4F4F6;
   
-  --primary: #D09B6A;
+  --primary: #00DFFF;
   --primary-foreground: #0B0B0C;
   
-  --secondary: #1C1C1F;
+  --secondary: #1F2740;
   --secondary-foreground: #E4E4E7;
   
-  --muted: #1C1C1F;
+  --muted: #182235;
   --muted-foreground: #8E8E93;
   
-  --accent: #B37B4D;
+  --accent: #FB3D71;
   --accent-foreground: #F4F4F6;
   
   --destructive: #EF4444;
   --destructive-foreground: #F4F4F6;
   
-  --border: #232326;
-  --input: #232326;
-  --ring: #D09B6A;
+  --border: #243149;
+  --input: #243149;
+  --ring: #00DFFF;
+
+  --neon-cyan: #00DFFF;
+  --neon-pink: #FB3D71;
+  --neon-purple: #8B5CF6;
+  --neon-orange: #FF8A3D;
+  --warm-coffee: #C58A55;
 
   --radius: 0.75rem;
 
@@ -72,8 +77,12 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  background-image: linear-gradient(180deg, rgba(208, 155, 106, 0.025), rgba(11, 11, 12, 0) 38%);
+  background-image:
+    radial-gradient(circle at 12% 0%, rgba(139, 92, 246, 0.15), transparent 34%),
+    radial-gradient(circle at 88% 8%, rgba(0, 223, 255, 0.11), transparent 32%),
+    linear-gradient(180deg, rgba(255, 138, 61, 0.05), rgba(8, 14, 20, 0) 40%);
   background-attachment: fixed;
+  letter-spacing: 0;
 }
 
 /* =============================================
@@ -130,12 +139,13 @@ input, select, textarea {
   transition: border-color 0.2s, box-shadow 0.2s;
   /* Ensure adequate tap target on mobile */
   min-height: 44px;
+  color-scheme: dark;
 }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(208, 155, 106, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 223, 255, 0.16), 0 0 24px rgba(0, 223, 255, 0.08);
 }
 
 /* =============================================
@@ -150,7 +160,7 @@ input:focus, select:focus, textarea:focus {
   transition: background 3s ease-in-out;
 }
 
-/* Phase: Yellow point */
+/* Legacy roast phase */
 .phase-bg-yellow {
   background: radial-gradient(ellipse at center, rgba(60, 50, 5, 0.40) 0%, transparent 70%);
   transition: background 3s ease-in-out;
@@ -194,6 +204,67 @@ button {
   min-height: 36px;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+}
+
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lab-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 20, 0.96), rgba(8, 14, 20, 0.99)),
+    radial-gradient(circle at 30% 0%, rgba(139, 92, 246, 0.12), transparent 40%);
+  color: #f4f4f6;
+}
+
+.lab-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(9, 15, 24, 0.88));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.lab-card-soft {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(17, 24, 39, 0.72);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+.neon-text {
+  background: linear-gradient(90deg, #00DFFF, #8B5CF6 45%, #FB3D71 72%, #FF8A3D);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.neon-ring {
+  box-shadow: 0 0 0 1px rgba(0, 223, 255, 0.24), 0 0 28px rgba(0, 223, 255, 0.10);
+}
+
+.tap-button {
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.tap-button:hover {
+  box-shadow: 0 0 0 1px rgba(0, 223, 255, 0.18), 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+.tap-button:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 0 0 2px rgba(0, 223, 255, 0.22), 0 0 26px rgba(251, 61, 113, 0.16);
+}
+
+.tap-button:focus-visible {
+  outline: 2px solid rgba(0, 223, 255, 0.72);
+  outline-offset: 2px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Large control buttons for Live Roast mode */
@@ -266,7 +337,7 @@ button {
    Gradient text
    ============================================= */
 .gradient-text {
-  background: linear-gradient(135deg, #D09B6A 0%, #F4C28A 50%, #B37B4D 100%);
+  background: linear-gradient(135deg, #00DFFF 0%, #8B5CF6 42%, #FB3D71 70%, #FF8A3D 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

@@ -1,81 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, Cloud, Download, FileText, RefreshCw, RotateCcw, Settings2, SlidersHorizontal, Upload } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Cloud, Download, FileText, RefreshCw, ShieldAlert, Upload } from 'lucide-react';
 import { DBService } from '@/lib/db';
-import { AppSettings, Bean, Roast, Tasting } from '@/types';
+import { Bean, Roast, Tasting } from '@/types';
+
+type ViewMode = 'main' | 'data' | 'danger';
 
 export default function SettingsPage() {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [roasts, setRoasts] = useState<Roast[]>([]);
   const [tastings, setTastings] = useState<Tasting[]>([]);
-  const [settings, setSettings] = useState<AppSettings>(() => DBService.getSettings());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [view, setView] = useState<ViewMode>('main');
+  const [confirmText, setConfirmText] = useState('');
 
-  const loadStats = () => {
+  const loadStats = useCallback(() => {
     setBeans(DBService.getBeans());
     setRoasts(DBService.getRoasts());
     setTastings(DBService.getTastings());
-    setSettings(DBService.getSettings());
-  };
+  }, []);
 
   useEffect(() => {
-    loadStats();
-  }, []);
+    const timer = window.setTimeout(loadStats, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStats]);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     window.setTimeout(() => setMessage(null), 4500);
-  };
-
-  const saveSettings = (patch: Partial<AppSettings>) => {
-    const next = DBService.saveSettings({ ...settings, ...patch });
-    setSettings(next);
-    showMsg('success', '表示設定を保存しました。');
-  };
-
-  const applyPreset = (mode: AppSettings['displayMode']) => {
-    if (mode === 'beginner') {
-      saveSettings({
-        displayMode: mode,
-        showBeanDetails: false,
-        showCropYear: false,
-        showPurchaseAge: true,
-        showProcess: true,
-        showStock: true,
-        showAnalysisCards: false,
-        showHomeSuggestions: true,
-        showLiveRoastDetails: false,
-      });
-      return;
-    }
-    if (mode === 'pro') {
-      saveSettings({
-        displayMode: mode,
-        showBeanDetails: true,
-        showCropYear: true,
-        showPurchaseAge: true,
-        showProcess: true,
-        showStock: true,
-        showAnalysisCards: true,
-        showHomeSuggestions: true,
-        showLiveRoastDetails: true,
-      });
-      return;
-    }
-    saveSettings({
-      displayMode: mode,
-      showBeanDetails: true,
-      showCropYear: true,
-      showPurchaseAge: true,
-      showProcess: true,
-      showStock: true,
-      showAnalysisCards: true,
-      showHomeSuggestions: true,
-      showLiveRoastDetails: true,
-    });
   };
 
   const handleExport = () => {
@@ -117,143 +72,166 @@ export default function SettingsPage() {
     showMsg(result.ok ? 'success' : 'error', result.ok ? '未同期データを再送しました。' : result.error || '再送に失敗しました。');
   };
 
-  const resetLocal = () => {
-    if (!confirm('ローカルデータを削除します。Google Sheets上のデータは残ります。続行しますか？')) return;
-    if (!confirm('本当にローカルのCoffee Labデータをリセットしますか？この操作は元に戻せません。')) return;
-    DBService.resetLocalData();
+  const syncFromCloud = async () => {
+    setIsBusy(true);
+    const result = await DBService.syncFromCloud();
+    setIsBusy(false);
     loadStats();
-    showMsg('success', 'ローカルデータをリセットしました。');
+    showMsg(result.ok ? 'success' : 'error', result.ok ? 'Google Sheetsから同期しました。' : result.error || '同期に失敗しました。');
   };
 
-  const resetAll = async () => {
-    if (!confirm('ローカルデータとGoogle Sheetsのbeans/roastsデータを削除します。続行しますか？')) return;
-    if (!confirm('最終確認です。全リセットは元に戻せません。必要なら先にJSONバックアップを出力してください。')) return;
+  const resetLocal = () => {
+    if (confirmText !== 'RESET') return;
+    DBService.resetLocalData();
+    setConfirmText('');
+    loadStats();
+    showMsg('success', 'ローカルデータをリセットしました。Google Sheetsのデータは残っています。');
+  };
+
+  const resetCloudAndLocal = async () => {
+    if (confirmText !== 'RESET') return;
     setIsBusy(true);
     DBService.resetLocalData();
     const result = await DBService.resetCloudData();
     setIsBusy(false);
+    setConfirmText('');
     loadStats();
     showMsg(result.ok ? 'success' : 'error', result.ok ? 'ローカルとGoogle Sheetsをリセットしました。' : result.error || 'Google Sheetsのリセットに失敗しました。ローカルは削除済みです。');
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-[#232326] bg-[#0E0E10] px-6 py-4">
-        <h1 className="text-xl font-bold tracking-wide">設定</h1>
-        <p className="text-xs text-[#8E8E93]">バックアップ、同期、表示カスタマイズ、データリセット</p>
+    <div className="lab-shell flex min-h-screen flex-col">
+      <header className="border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur md:px-6">
+        <div className="flex items-center gap-3">
+          {view !== 'main' && (
+            <button onClick={() => setView(view === 'danger' ? 'data' : 'main')} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="戻る">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-bold tracking-wide">設定</h1>
+            <p className="text-xs text-slate-400">同期、バックアップ、データ管理</p>
+          </div>
+        </div>
       </header>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-6 pb-24">
+      <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 pb-24 md:p-6">
         {message && (
-          <div className={`flex items-center gap-2 rounded-lg border p-4 text-sm ${message.type === 'success' ? 'border-emerald-800 bg-emerald-950/40 text-emerald-300' : 'border-red-800 bg-red-950/40 text-red-300'}`}>
+          <div className={`flex items-center gap-2 rounded-lg border p-4 text-sm ${message.type === 'success' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-200' : 'border-red-300/20 bg-red-400/10 text-red-200'}`}>
             <AlertCircle className="h-5 w-5" />
             {message.text}
           </div>
         )}
 
-        <section className="space-y-5 rounded-xl border border-[#232326] bg-[#131315] p-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#8E8E93]">
-            <Cloud className="h-4 w-4 text-[#D09B6A]" />
-            同期とバックアップ
-          </h2>
+        {view === 'main' && (
+          <>
+            <section className="lab-card-soft space-y-5 rounded-xl p-6">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+                <Cloud className="h-4 w-4 text-cyan-200" />
+                同期とバックアップ
+              </h2>
 
-          <div className="grid grid-cols-3 gap-3 rounded-lg border border-[#232326] bg-[#1A1A1E] p-3 text-center text-xs text-[#A1A1AA]">
-            <Stat label="生豆" value={`${beans.length} 件`} />
-            <Stat label="焙煎" value={`${roasts.length} 件`} />
-            <Stat label="テイスティング" value={`${tastings.filter(t => t.status === 'completed').length} 件`} />
-          </div>
+              <Stats beans={beans.length} roasts={roasts.length} tastings={tastings.filter(t => t.status === 'completed').length} />
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button onClick={retryPendingSync} disabled={isBusy} className="flex items-center justify-center gap-2 rounded-lg border border-[#232326] bg-[#1E1E22] px-4 py-2.5 text-sm font-semibold text-[#E4E4E7] disabled:opacity-60">
-              <RefreshCw className="h-4 w-4" />
-              未同期データを再送
-            </button>
-            <Link href="/report" className="flex items-center justify-center gap-2 rounded-lg bg-[#D09B6A] px-4 py-2.5 text-sm font-semibold text-[#0B0B0C]">
-              <FileText className="h-4 w-4" />
-              印刷用レポートを開く
-            </Link>
-            <button onClick={handleExport} className="flex items-center justify-center gap-2 rounded-lg border border-[#232326] bg-[#1E1E22] px-4 py-2.5 text-sm font-semibold text-[#E4E4E7]">
-              <Download className="h-4 w-4" />
-              JSONバックアップ
-            </button>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-[#232326] bg-[#1E1E22] px-4 py-2.5 text-sm font-semibold text-[#E4E4E7]">
-              <Upload className="h-4 w-4" />
-              JSONから復元
-              <input type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button onClick={retryPendingSync} disabled={isBusy} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:opacity-60">
+                  <RefreshCw className="h-4 w-4" />
+                  未同期データを再送
+                </button>
+                <button onClick={syncFromCloud} disabled={isBusy} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:opacity-60">
+                  <RefreshCw className="h-4 w-4" />
+                  Google Sheetsから更新
+                </button>
+                <button onClick={handleExport} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200">
+                  <Download className="h-4 w-4" />
+                  JSONバックアップ
+                </button>
+                <label className="tap-button flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200">
+                  <Upload className="h-4 w-4" />
+                  JSONから復元
+                  <input type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
+                </label>
+              </div>
+            </section>
+
+            <section className="lab-card-soft rounded-xl p-6">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+                <FileText className="h-4 w-4 text-cyan-200" />
+                レポート
+              </h2>
+              <p className="text-sm text-slate-400">印刷向けの焙煎レポートを開きます。</p>
+              <Link href="/report" className="tap-button mt-4 inline-flex rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">レポートを開く</Link>
+            </section>
+
+            <section className="lab-card-soft rounded-xl p-6">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+                <ShieldAlert className="h-4 w-4 text-amber-200" />
+                データ管理
+              </h2>
+              <p className="text-sm text-slate-400">危険な操作はこの先の専用画面に分けています。</p>
+              <button onClick={() => setView('data')} className="tap-button mt-4 rounded-lg border border-amber-300/20 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100">データ管理を開く</button>
+            </section>
+          </>
+        )}
+
+        {view === 'data' && (
+          <section className="lab-card-soft space-y-5 rounded-xl p-6">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <ShieldAlert className="h-4 w-4 text-amber-200" />
+              データ管理
+            </h2>
+            <Stats beans={beans.length} roasts={roasts.length} tastings={tastings.filter(t => t.status === 'completed').length} />
+            <p className="text-sm leading-relaxed text-slate-400">
+              通常はJSONバックアップと同期で十分です。リセットが必要な場合だけ、危険な操作の画面へ進んでください。
+            </p>
+            <button onClick={() => setView('danger')} className="tap-button rounded-lg border border-red-300/20 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-200">危険な操作へ進む</button>
+          </section>
+        )}
+
+        {view === 'danger' && (
+          <section className="space-y-5 rounded-xl border border-red-300/25 bg-red-400/10 p-6">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-red-200">
+              <ShieldAlert className="h-4 w-4" />
+              データリセット
+            </h2>
+            <div className="rounded-xl border border-red-300/20 bg-[#080E14]/60 p-4 text-sm leading-relaxed text-red-100">
+              <p>ローカルリセット: このブラウザのCoffee Labデータ、未同期queue、設定を削除します。Google Sheetsは残ります。</p>
+              <p className="mt-2">Sheetsも含めてリセット: ローカルに加えてGoogle Sheetsのbeans / roasts / tastingsのデータ行を削除します。</p>
+            </div>
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold text-red-100">実行するには RESET と入力してください</span>
+              <input value={confirmText} onChange={event => setConfirmText(event.target.value)} className="w-full rounded-lg border border-red-300/30 bg-[#101827] px-3 py-2 text-sm text-red-100" />
             </label>
-          </div>
-        </section>
-
-        <section className="space-y-5 rounded-xl border border-[#232326] bg-[#131315] p-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#8E8E93]">
-            <SlidersHorizontal className="h-4 w-4 text-[#D09B6A]" />
-            表示カスタマイズ
-          </h2>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(['beginner', 'detail', 'pro'] as const).map(mode => (
-              <button key={mode} onClick={() => applyPreset(mode)} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${settings.displayMode === mode ? 'border-[#D09B6A] bg-[#D09B6A]/10 text-[#D09B6A]' : 'border-[#232326] bg-[#1A1A1E] text-[#E4E4E7]'}`}>
-                {mode === 'beginner' ? '初心者' : mode === 'detail' ? '詳細' : 'プロ'}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button onClick={resetLocal} disabled={confirmText !== 'RESET' || isBusy} className="tap-button rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                ローカルだけリセット
               </button>
-            ))}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Toggle label="生豆の詳細項目" checked={settings.showBeanDetails} onChange={value => saveSettings({ showBeanDetails: value })} />
-            <Toggle label="クロップ年" checked={settings.showCropYear} onChange={value => saveSettings({ showCropYear: value })} />
-            <Toggle label="購入日経過日数" checked={settings.showPurchaseAge} onChange={value => saveSettings({ showPurchaseAge: value })} />
-            <Toggle label="精製方法" checked={settings.showProcess} onChange={value => saveSettings({ showProcess: value })} />
-            <Toggle label="在庫情報" checked={settings.showStock} onChange={value => saveSettings({ showStock: value })} />
-            <Toggle label="分析カード" checked={settings.showAnalysisCards} onChange={value => saveSettings({ showAnalysisCards: value })} />
-            <Toggle label="ホーム提案カード" checked={settings.showHomeSuggestions} onChange={value => saveSettings({ showHomeSuggestions: value })} />
-            <Toggle label="Live Roast詳細ログ" checked={settings.showLiveRoastDetails} onChange={value => saveSettings({ showLiveRoastDetails: value })} />
-          </div>
-        </section>
-
-        <section className="space-y-5 rounded-xl border border-red-900/30 bg-red-950/10 p-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-red-300">
-            <RotateCcw className="h-4 w-4" />
-            データリセット
-          </h2>
-          <p className="text-sm leading-relaxed text-[#A1A1AA]">
-            誤操作防止のため確認を2回表示します。全リセット前にはJSONバックアップを出力しておくと安心です。
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button onClick={resetLocal} className="rounded-lg border border-[#232326] bg-[#1E1E22] px-4 py-2.5 text-sm font-semibold text-[#E4E4E7]">
-              ローカルだけリセット
-            </button>
-            <button onClick={resetAll} disabled={isBusy} className="rounded-lg border border-red-800/50 bg-red-900/30 px-4 py-2.5 text-sm font-semibold text-red-200 disabled:opacity-60">
-              Sheetsも含めて全リセット
-            </button>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-[#232326] bg-[#131315] p-6">
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#8E8E93]">
-            <Settings2 className="h-4 w-4 text-[#D09B6A]" />
-            データベース
-          </h2>
-          <p className="text-sm text-[#A1A1AA]">現在の同期先は Google Sheets / Google Apps Script Web App です。</p>
-        </section>
+              <button onClick={resetCloudAndLocal} disabled={confirmText !== 'RESET' || isBusy} className="tap-button rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-100 disabled:cursor-not-allowed disabled:opacity-40">
+                Sheetsも含めて全リセット
+              </button>
+            </div>
+          </section>
+        )}
       </div>
+    </div>
+  );
+}
+
+function Stats({ beans, roasts, tastings }: { beans: number; roasts: number; tastings: number }) {
+  return (
+    <div className="grid grid-cols-3 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 text-center text-xs text-slate-400">
+      <Stat label="生豆" value={`${beans}件`} />
+      <Stat label="焙煎" value={`${roasts}件`} />
+      <Stat label="テイスティング" value={`${tastings}件`} />
     </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <span className="block text-[10px] text-[#8E8E93]">{label}</span>
-      <span className="font-mono text-lg font-bold text-[#F4F4F6]">{value}</span>
+    <div className="min-w-0">
+      <span className="block text-[10px] text-slate-500">{label}</span>
+      <span className="block truncate font-mono text-lg font-bold text-[#F4F4F6]">{value}</span>
     </div>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <label className="flex items-center justify-between rounded-lg border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm text-[#E4E4E7]">
-      {label}
-      <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} className="h-5 w-5 accent-[#D09B6A]" />
-    </label>
   );
 }

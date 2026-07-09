@@ -1,5 +1,5 @@
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
-import { calculateDevRatio, calculateDevTime, calculateLossRatio } from '@/lib/db';
+import { calculateDevRatio, calculateDevTime, calculateLossRatio, normalizeElapsedTime } from '@/lib/db';
 import { normalizeDateOnly } from '@/lib/date';
 
 type AppsScriptJson = {
@@ -22,7 +22,7 @@ type SheetsSnapshot = {
 };
 
 type RoastTimelinePayload = {
-  steps?: RoastStep[];
+  steps?: Partial<RoastStep>[];
   secondCrackTime?: string;
 };
 
@@ -39,7 +39,7 @@ export function validateAppsScriptConfig() {
   if (!APPS_SCRIPT_HOST_RE.test(url)) {
     return {
       ok: false,
-      error: 'GOOGLE_APPS_SCRIPT_URLが不正です。https://script.google.com/macros/s/.../exec で終わるWeb App URLを設定してください。',
+      error: 'GOOGLE_APPS_SCRIPT_URLが不正です。https://script.google.com/macros/s/.../exec のWeb App URLを設定してください。',
     };
   }
   return { ok: true, url };
@@ -80,7 +80,7 @@ async function parseJsonResponse(response: Response): Promise<AppsScriptJson> {
     return JSON.parse(text) as AppsScriptJson;
   } catch {
     console.error('Apps Script returned non-JSON response:', text.slice(0, 500));
-    throw new Error('Google Apps ScriptからJSONではない応答が返りました。同期はバックグラウンドで再試行します。');
+    throw new Error('Google Sheetsとの同期に失敗しました。バックグラウンドで再試行します。');
   }
 }
 
@@ -140,7 +140,7 @@ function parseTimelinePayload(raw: unknown): RoastTimelinePayload {
   if (!raw) return {};
   try {
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (Array.isArray(parsed)) return { steps: parsed as RoastStep[] };
+    if (Array.isArray(parsed)) return { steps: parsed };
     if (parsed && typeof parsed === 'object') return parsed as RoastTimelinePayload;
   } catch {
     return {};
@@ -153,16 +153,17 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
   const timeline = parseTimelinePayload(row.timelineJson);
   const greenWeight = toNumber(row.greenWeight, toNumber(row.inputWeight));
   const roastedWeight = toNumber(row.roastedWeight, toNumber(row.expectedOutputWeight));
-  const firstCrackTime = toStringValue(row.firstCrackTime) || null;
-  const dropTime = toStringValue(row.dropTime);
+  const firstCrackTime = normalizeElapsedTime(row.firstCrackTime) || null;
+  const secondCrackTime = normalizeElapsedTime(row.secondCrackTime) || normalizeElapsedTime(timeline.secondCrackTime) || null;
+  const dropTime = normalizeElapsedTime(row.dropTime);
   const steps = Array.isArray(timeline.steps)
     ? timeline.steps.map((step, index) => ({
-        id: step.id || `step_${roastId}_${index}`,
+        id: toStringValue(step.id) || `step_${roastId}_${index}`,
         roastId,
-        time: step.time || '00:00',
+        time: normalizeElapsedTime(step.time) || '00:00',
         heat: toNumber(step.heat),
         air: toNumber(step.air),
-        memo: step.memo || '',
+        memo: toStringValue(step.memo),
       }))
     : [];
 
@@ -173,11 +174,12 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
       beanId: toStringValue(row.beanId),
       greenWeight,
       roastedWeight,
-      yellowTime: toStringValue(row.yellowTime),
+      yellowTime: normalizeElapsedTime(row.yellowTime),
       firstCrackTime,
       firstCrackStatus: (toStringValue(row.firstCrackStatus) || (firstCrackTime ? 'recorded' : 'unknown')) as Roast['firstCrackStatus'],
+      secondCrackTime,
       dropTime,
-      developmentTime: firstCrackTime ? (toStringValue(row.developmentTime) || calculateDevTime(firstCrackTime, dropTime)) : null,
+      developmentTime: firstCrackTime ? (normalizeElapsedTime(row.developmentTime) || calculateDevTime(firstCrackTime, dropTime)) : null,
       developmentRatio: firstCrackTime ? toNullableNumber(row.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)) : null,
       lossRatio: toNumber(row.lossRatio, calculateLossRatio(greenWeight, roastedWeight)),
       status: (toStringValue(row.status) || 'roasted') as Roast['status'],
@@ -220,7 +222,7 @@ function normalizeTasting(row: Record<string, unknown>): Tasting {
     flavors: toStringArray(row.flavors),
     negatives: toStringArray(row.negatives),
     improvements: toStringValue(row.improvements),
-    impressionColor: toStringValue(row.impressionColor) || '#D09B6A',
+    impressionColor: toStringValue(row.impressionColor) || '#00DFFF',
     notes: toStringValue(row.notes),
     photos: toStringArray(row.photos),
     status: toStringValue(row.status) === 'pending' ? 'pending' : 'completed',
@@ -242,7 +244,7 @@ function beanToAppsScriptRow(bean: Bean): Record<string, unknown> {
     process: bean.process,
     cropYear: bean.cropYear,
     purchaseShop: bean.purchaseShop,
-    purchaseDate: bean.purchaseDate,
+    purchaseDate: normalizeDateOnly(bean.purchaseDate),
     purchasePrice: bean.purchasePrice,
     initialWeight: bean.initialWeight,
     currentWeight: bean.currentWeight,
@@ -258,24 +260,26 @@ function beanToAppsScriptRow(bean: Bean): Record<string, unknown> {
 function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): Record<string, unknown> {
   const roastSteps = steps
     .filter(step => step.roastId === roast.id)
+    .map(step => ({ ...step, time: normalizeElapsedTime(step.time) || '00:00' }))
     .sort((a, b) => a.time.localeCompare(b.time));
-  const secondCrackMatch = roast.notes.match(/2nd Crack:\s*([0-9]{2}:[0-9]{2})/);
+  const secondCrackTime = normalizeElapsedTime(roast.secondCrackTime);
   const timelinePayload: RoastTimelinePayload = {
     steps: roastSteps,
-    secondCrackTime: secondCrackMatch?.[1] || '',
+    secondCrackTime,
   };
 
   return {
     id: roast.id,
-    roastDate: roast.roastDate,
+    roastDate: normalizeDateOnly(roast.roastDate),
     beanId: roast.beanId,
     greenWeight: roast.greenWeight,
     roastedWeight: roast.roastedWeight,
-    yellowTime: roast.yellowTime,
-    firstCrackTime: roast.firstCrackTime || '',
+    yellowTime: normalizeElapsedTime(roast.yellowTime),
+    firstCrackTime: normalizeElapsedTime(roast.firstCrackTime) || '',
     firstCrackStatus: roast.firstCrackStatus || (roast.firstCrackTime ? 'recorded' : 'unknown'),
-    dropTime: roast.dropTime,
-    developmentTime: roast.developmentTime || '',
+    secondCrackTime,
+    dropTime: normalizeElapsedTime(roast.dropTime),
+    developmentTime: normalizeElapsedTime(roast.developmentTime) || '',
     developmentRatio: roast.developmentRatio ?? '',
     lossRatio: roast.lossRatio,
     status: roast.status,
@@ -291,7 +295,7 @@ function tastingToAppsScriptRow(tasting: Tasting): Record<string, unknown> {
     id: tasting.id,
     roastId: tasting.roastId,
     tastingIndex: tasting.tastingIndex,
-    tastingDate: tasting.tastingDate,
+    tastingDate: normalizeDateOnly(tasting.tastingDate),
     dayAfterRoast: tasting.dayAfterRoast,
     tastingDay: tasting.dayAfterRoast,
     doseGrams: tasting.doseGrams,

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Clock, Flame, Play, RotateCcw, Save, Square, Timer, Trash2, Wind } from 'lucide-react';
+import { ArrowLeft, Clock, Flame, Play, RotateCcw, Save, Square, Timer, Trash2, Wind } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Bean, Roast, RoastStep } from '@/types';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio, DBService, secondsToTime, timeToSeconds } from '@/lib/db';
@@ -54,15 +54,15 @@ function NewRoastContent() {
   const [roastId] = useState(() => DBService.generateNextRoastId());
   const [beanId, setBeanId] = useState(() => preselectedBeanId || DBService.getBeans()[0]?.id || '');
   const [roastDate, setRoastDate] = useState(todayDateString());
-  const [greenWeightInput, setGreenWeightInput] = useState('200');
+  const [greenWeightInput, setGreenWeightInput] = useState('67');
   const [notes, setNotes] = useState('');
 
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [liveHeat, setLiveHeat] = useState(7);
-  const [liveAir, setLiveAir] = useState(2);
+  const [liveHeat, setLiveHeat] = useState(8);
+  const [liveAir, setLiveAir] = useState(8);
   const [firstCrackTime, setFirstCrackTime] = useState('');
   const [firstCrackStatus, setFirstCrackStatus] = useState<Roast['firstCrackStatus']>('unknown');
   const [secondCrackTime, setSecondCrackTime] = useState('');
@@ -70,8 +70,8 @@ function NewRoastContent() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
 
   const [newTime, setNewTime] = useState('02:00');
-  const [newHeat, setNewHeat] = useState(7);
-  const [newAir, setNewAir] = useState(2);
+  const [newHeat, setNewHeat] = useState(8);
+  const [newAir, setNewAir] = useState(8);
   const [newMemo, setNewMemo] = useState('');
   const [ghostRoastId, setGhostRoastId] = useState('');
   const [ghostSteps, setGhostSteps] = useState<TimelineEntry[]>([]);
@@ -91,9 +91,10 @@ function NewRoastContent() {
     return Math.round(greenWeight * (1 - loss / 100) * 10) / 10;
   }, [greenWeight, selectedBean]);
   const lossRatio = calculateLossRatio(greenWeight, predictedRoastedWeight);
-  const devTime = calculateDevTime(firstCrackTime, dropTime);
-  const devRatio = calculateDevRatio(firstCrackTime, dropTime);
   const currentTime = secondsToTime(elapsedSecs);
+  const devTime = firstCrackTime ? calculateDevTime(firstCrackTime, dropTime || currentTime) : null;
+  const devRatio = firstCrackTime ? calculateDevRatio(firstCrackTime, dropTime || currentTime) : null;
+  const beanAccent = selectedBean?.themeColor || '#00DFFF';
 
   const loadLocalData = useCallback(() => {
     const allBeans = DBService.getBeans();
@@ -160,14 +161,15 @@ function NewRoastContent() {
       greenWeight,
       roastedWeight: predictedRoastedWeight,
       yellowTime: '',
-      firstCrackTime: draftFirstCrackTime,
+      firstCrackTime: draftFirstCrackTime || null,
       firstCrackStatus: draftFirstCrackStatus,
+      secondCrackTime: draftSecondCrackTime || null,
       dropTime: draftDropTime,
       developmentTime: calculateDevTime(draftFirstCrackTime, draftDropTime),
       developmentRatio: calculateDevRatio(draftFirstCrackTime, draftDropTime),
       lossRatio: calculateLossRatio(greenWeight, predictedRoastedWeight),
       status: 'waiting_day7',
-      notes: [notes, draftSecondCrackTime ? `2nd Crack: ${draftSecondCrackTime}` : ''].filter(Boolean).join('\n'),
+      notes,
       createdAt: new Date().toISOString(),
     };
   }, [beanId, dropTime, firstCrackStatus, firstCrackTime, greenWeight, notes, predictedRoastedWeight, roastDate, roastId, secondCrackTime]);
@@ -215,8 +217,8 @@ function NewRoastContent() {
     setHasStarted(false);
     setElapsedSecs(0);
     setPhase('idle');
-    setLiveHeat(7);
-    setLiveAir(2);
+    setLiveHeat(8);
+    setLiveAir(8);
     setFirstCrackTime('');
     setFirstCrackStatus('unknown');
     setSecondCrackTime('');
@@ -315,18 +317,10 @@ function NewRoastContent() {
     const finalSteps: RoastStep[] = timeline.map((step, index) => ({ ...step, id: `step_${roastId}_${index}`, roastId }));
     setIsSaving(true);
     setSyncError('');
-    DBService.saveRoast(finalRoast, finalSteps, false);
-    const result = await DBService.saveRoastToCloud(finalRoast, finalSteps);
+    DBService.saveRoast(finalRoast, finalSteps, true);
     setIsSaving(false);
-
-    if (result.ok) {
-      setSyncStatus('Google Sheetsへ保存済み');
-      router.push(`/roasts/${roastId}`);
-      return;
-    }
-
-    setSyncStatus('保存失敗（ローカルには保持）');
-    setSyncError(result.error || 'Google Sheetsとの同期に失敗しました。ローカルに保存し、バックグラウンドで再試行します。');
+    setSyncStatus('ローカル保存済み。Google Sheetsはバックグラウンドで同期します');
+    router.push(`/roasts/${roastId}`);
   };
 
   const retryPendingSync = async () => {
@@ -352,10 +346,10 @@ function NewRoastContent() {
   }, [ghostSteps, timeline]);
 
   return (
-    <div className="min-h-screen bg-[#0B0B0C] text-[#F4F4F6]" style={{ backgroundImage: PHASE_STYLE[phase] }}>
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#232326] bg-[#0E0E10]/95 px-4 py-4 backdrop-blur md:px-6">
+    <div className="lab-shell min-h-screen text-[#F4F4F6]" style={{ backgroundImage: `${PHASE_STYLE[phase]}, radial-gradient(circle at 80% 0%, ${beanAccent}22, transparent 36%)` }}>
+      <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div className="flex items-center gap-3">
-          <Link href="/roasts" className="rounded-lg p-2 text-[#8E8E93] hover:bg-[#232326] hover:text-[#F4F4F6]">
+          <Link href="/roasts" className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-[#F4F4F6]">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
@@ -363,13 +357,13 @@ function NewRoastContent() {
             <p className="text-xs text-[#8E8E93]">{roastId} / {syncStatus}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {DBService.getPendingSyncCount() > 0 && (
-            <button onClick={retryPendingSync} className="hidden rounded-xl border border-[#D09B6A]/40 px-3 py-2 text-xs font-bold text-[#D09B6A] md:block">
+            <button onClick={retryPendingSync} className="tap-button hidden rounded-xl border border-cyan-300/40 px-3 py-2 text-xs font-bold text-cyan-100 md:block">
               未同期を再送
             </button>
           )}
-        <button onClick={saveRoast} disabled={isSaving} className="flex items-center gap-2 rounded-xl bg-[#D09B6A] px-4 py-2 text-sm font-bold text-[#0B0B0C] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60">
+        <button onClick={saveRoast} disabled={isSaving} className="tap-button flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14] disabled:cursor-not-allowed disabled:opacity-60" style={{ backgroundColor: beanAccent }}>
           <Save className="h-4 w-4" />
           {isSaving ? '保存中' : '保存'}
         </button>
@@ -382,59 +376,58 @@ function NewRoastContent() {
         </div>
       )}
 
-      <div className="sticky top-[73px] z-10 grid grid-cols-2 border-b border-[#232326] bg-[#0E0E10]/95 backdrop-blur">
-        <button onClick={() => setTabMode('live')} className={`flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-b-2 border-[#D09B6A] text-[#D09B6A]' : 'text-[#8E8E93]'}`}>
+      <div className="sticky top-[98px] z-10 grid grid-cols-2 border-b border-white/10 bg-[#080E14]/95 backdrop-blur sm:top-[73px]">
+        <button onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-b-2 text-cyan-100' : 'text-slate-400'}`} style={{ borderColor: tabMode === 'live' ? beanAccent : undefined }}>
           <Timer className="h-4 w-4" /> Live
         </button>
-        <button onClick={() => setTabMode('manual')} className={`flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'manual' ? 'border-b-2 border-[#D09B6A] text-[#D09B6A]' : 'text-[#8E8E93]'}`}>
+        <button onClick={() => setTabMode('manual')} className={`tap-button flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'manual' ? 'border-b-2 text-cyan-100' : 'text-slate-400'}`} style={{ borderColor: tabMode === 'manual' ? beanAccent : undefined }}>
           <Clock className="h-4 w-4" /> 手入力
         </button>
       </div>
 
       {tabMode === 'live' ? (
-        <main className="grid gap-5 p-4 lg:grid-cols-[360px_1fr_360px] lg:p-6">
+        <main className="grid gap-5 p-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)_minmax(280px,360px)] lg:p-6">
           <section className="space-y-4">
             <Panel title="バッチ設定">
               <label className="space-y-1 block">
                 <span className="text-xs text-[#8E8E93]">使用する生豆</span>
-                <select value={beanId} onChange={event => setBeanId(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 text-sm">
+                <select value={beanId} onChange={event => setBeanId(event.target.value)} className="w-full rounded-xl border bg-[#101827] px-3 py-3 text-sm" style={{ borderColor: `${beanAccent}66` }}>
                   {beans.map(bean => <option key={bean.id} value={bean.id}>[{bean.id}] {bean.country} - {bean.name}</option>)}
                 </select>
               </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="space-y-1 block">
                   <span className="text-xs text-[#8E8E93]">焙煎日</span>
-                  <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 text-sm" />
+                  <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-3 text-sm" />
                 </label>
                 <label className="space-y-1 block">
                   <span className="text-xs text-[#8E8E93]">投入量(g)</span>
-                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 font-mono text-sm" />
+                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-3 font-mono text-sm" />
                 </label>
               </div>
               {selectedBean && (
-                <div className="rounded-xl border border-[#232326] bg-[#1A1A1E] p-3 text-xs text-[#A1A1AA]">
-                  <div className="flex justify-between"><span>登録参考量</span><strong className="font-mono text-[#F4F4F6]">{selectedBean.currentWeight}g</strong></div>
+                <div className="rounded-xl border bg-[#101827] p-3 text-xs text-slate-300" style={{ borderColor: `${beanAccent}44` }}>
+                  <div className="flex justify-between"><span>購入量</span><strong className="font-mono text-[#F4F4F6]">{selectedBean.initialWeight}g</strong></div>
                   <div className="flex justify-between"><span>減耗率</span><strong className="font-mono text-[#D09B6A]">{selectedBean.weightLossPercentage}%</strong></div>
-                  <div className="mt-2 flex justify-between border-t border-[#232326] pt-2"><span>予想焙煎後重量</span><strong className="font-mono text-lg text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>
+                  <div className="mt-2 flex justify-between border-t border-white/10 pt-2"><span>予想焙煎後重量</span><strong className="font-mono text-lg text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>
                 </div>
               )}
-              <p className="flex items-center gap-1 text-xs text-[#8E8E93]"><AlertTriangle className="h-3 w-3" />生豆量は自動増減しません。投入量だけ焙煎バッチに記録します。</p>
             </Panel>
 
             <Panel title="タイマー">
-              <div className="rounded-2xl bg-[#050506] p-6 text-center shadow-inner">
+              <div className="rounded-3xl bg-[#050A11] p-6 text-center shadow-inner neon-ring">
                 <div className="timer-display font-mono text-6xl font-black tracking-normal text-[#F4F4F6] md:text-7xl">{currentTime}</div>
                 <p className="mt-2 text-xs text-[#8E8E93]">START前でも火力・風量を事前設定できます</p>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <button onClick={isRunning ? pauseRoast : startRoast} className="flex items-center justify-center gap-2 rounded-xl bg-[#D09B6A] py-3 font-bold text-[#0B0B0C] active:scale-95">
+                <button onClick={isRunning ? pauseRoast : startRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full py-3 font-bold text-[#080E14]" style={{ backgroundColor: beanAccent }}>
                   {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   {isRunning ? 'PAUSE' : 'START'}
                 </button>
-                <button onClick={resetRoast} className="flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1F] py-3 font-bold text-[#E4E4E7] active:scale-95">
+                <button onClick={resetRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full bg-white/[0.06] py-3 font-bold text-[#E4E4E7]">
                   <RotateCcw className="h-4 w-4" /> RESET
                 </button>
-                <button onClick={saveRoast} className="flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1F] py-3 font-bold text-[#E4E4E7] active:scale-95">
+                <button onClick={saveRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full bg-white/[0.06] py-3 font-bold text-[#E4E4E7]">
                   <Save className="h-4 w-4" /> SAVE
                 </button>
               </div>
@@ -447,7 +440,7 @@ function NewRoastContent() {
               <NumberControl icon={<Wind className="h-4 w-4" />} label="風量" value={liveAir} onChange={changeAir} color="blue" />
             </Panel>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <MilestoneButton label="1st Crack" time={firstCrackTime} onClick={() => recordMilestone('1st Crack', 'firstCrackTime')} disabled={!hasStarted} color="orange" />
               <MilestoneButton label="2nd Crack" time={secondCrackTime} onClick={() => recordMilestone('2nd Crack', 'secondCrackTime')} disabled={!hasStarted} color="red" />
               <MilestoneButton label="Drop" time={dropTime} onClick={() => recordMilestone('Drop', 'dropTime')} disabled={!hasStarted} color="stone" />
@@ -480,6 +473,11 @@ function NewRoastContent() {
               <Stat label="Dev" value={devTime || '不明'} />
               <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
             </div>
+            {firstCrackTime && !dropTime && (
+              <p className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100">
+                1st Crack後のDevは現在時刻ベースでリアルタイム計算中です。
+              </p>
+            )}
 
             <Panel title="タイムライン">
               <div className="max-h-[440px] space-y-2 overflow-y-auto pr-1">
@@ -561,8 +559,8 @@ function NewRoastContent() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-2xl border border-[#232326] bg-[#131315]/85 p-4 shadow-lg shadow-black/20">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-[#8E8E93]">{title}</h2>
+    <section className="lab-card-soft space-y-4 rounded-2xl p-4">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</h2>
       {children}
     </section>
   );
@@ -573,9 +571,9 @@ function NumberControl({ icon, label, value, onChange, color }: { icon: React.Re
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-bold text-[#E4E4E7]">{icon}{label}<span className="font-mono text-[#8E8E93]">{value}</span></div>
-      <div className="grid grid-cols-8 gap-1.5">
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
         {CONTROL_VALUES.map(item => (
-          <button key={item} type="button" onClick={() => onChange(item)} className={`aspect-square min-h-11 rounded-lg border text-sm font-bold transition active:scale-95 ${item === value ? activeClass : 'border-[#232326] bg-[#1A1A1E] text-[#A1A1AA] hover:bg-[#232326]'}`}>{item}</button>
+          <button key={item} type="button" onClick={() => onChange(item)} className={`tap-button aspect-square min-h-11 rounded-xl border text-sm font-bold ${item === value ? activeClass : 'border-white/10 bg-white/[0.05] text-slate-400 hover:bg-white/[0.08]'}`}>{item}</button>
         ))}
       </div>
     </div>
@@ -585,7 +583,7 @@ function NumberControl({ icon, label, value, onChange, color }: { icon: React.Re
 function MilestoneButton({ label, time, onClick, disabled, color }: { label: string; time: string; onClick: () => void; disabled: boolean; color: 'orange' | 'red' | 'stone' }) {
   const colorClass = color === 'orange' ? 'bg-orange-500/15 text-orange-300 border-orange-500/30' : color === 'red' ? 'bg-red-500/15 text-red-300 border-red-500/30' : 'bg-stone-300/10 text-stone-200 border-stone-300/30';
   return (
-    <button disabled={disabled} onClick={onClick} className={`rounded-2xl border p-4 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${colorClass}`}>
+    <button disabled={disabled} onClick={onClick} className={`tap-button min-h-20 rounded-3xl border p-4 text-center disabled:cursor-not-allowed disabled:opacity-40 ${colorClass}`}>
       <span className="block text-sm font-bold">{label}</span>
       <span className="mt-1 block font-mono text-xs opacity-80">{time || '--:--'}</span>
     </button>
@@ -594,9 +592,9 @@ function MilestoneButton({ label, time, onClick, disabled, color }: { label: str
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#232326] bg-[#131315] p-3 text-center">
-      <span className="block text-[10px] uppercase tracking-wider text-[#8E8E93]">{label}</span>
-      <strong className="font-mono text-lg text-[#D09B6A]">{value}</strong>
+    <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center">
+      <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
+      <strong className="block truncate font-mono text-lg text-cyan-100">{value}</strong>
     </div>
   );
 }
