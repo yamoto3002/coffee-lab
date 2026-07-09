@@ -37,9 +37,10 @@ export interface Roast {
   roastDate: string; // YYYY-MM-DD
   greenWeight: number; // input weight in grams
   roastedWeight: number; // output or expected weight in grams
-  yellowTime: string; // MM:SS
+  yellowTime: string; // legacy MM:SS, hidden from current UI
   firstCrackTime: string | null; // MM:SS
   firstCrackStatus?: FirstCrackStatus;
+  secondCrackTime?: string | null; // MM:SS
   dropTime: string; // MM:SS
   developmentTime: string | null; // MM:SS
   developmentRatio: number | null; // percentage (e.g. 15.5)

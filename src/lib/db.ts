@@ -2,8 +2,9 @@ import { AppSettings, Bean, ExternalCoffee, Roast, RoastStatus, RoastStep, Tasti
 import { diffDateDays, normalizeDateOnly, todayDateString } from './date';
 
 export function timeToSeconds(timeStr: string | null | undefined): number {
-  if (!timeStr || !timeStr.includes(':')) return 0;
-  const [mins, secs] = timeStr.split(':').map(Number);
+  const normalized = normalizeElapsedTime(timeStr);
+  if (!normalized || !normalized.includes(':')) return 0;
+  const [mins, secs] = normalized.split(':').map(Number);
   if (!Number.isFinite(mins) || !Number.isFinite(secs)) return 0;
   return mins * 60 + secs;
 }
@@ -13,6 +14,45 @@ export function secondsToTime(secs: number): string {
   const mins = Math.floor(secs / 60);
   const remainingSecs = Math.floor(secs % 60);
   return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+}
+
+export function normalizeElapsedTime(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'number' && Number.isFinite(value)) return secondsToTime(value);
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  if (/^\d+$/.test(raw)) return secondsToTime(Number(raw));
+
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw) || /\bGMT\b|\bUTC\b|Z$/i.test(raw)) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+    }
+  }
+
+  const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (hms) {
+    const first = Number(hms[1]);
+    const second = Number(hms[2]);
+    const third = Number(hms[3]);
+    if ([first, second, third].every(Number.isFinite)) {
+      if (first === 0) return secondsToTime(second * 60 + third);
+      return `${String(first).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+    }
+  }
+
+  const ms = raw.match(/^(\d{1,3}):(\d{1,2})$/);
+  if (ms) {
+    const mins = Number(ms[1]);
+    const secs = Number(ms[2]);
+    if (Number.isFinite(mins) && Number.isFinite(secs)) {
+      return `${String(mins).padStart(2, '0')}:${String(Math.max(0, Math.min(59, secs))).padStart(2, '0')}`;
+    }
+  }
+
+  return raw;
 }
 
 export function calculateDevTime(firstCrack: string | null | undefined, drop: string | null | undefined): string | null {
@@ -148,6 +188,13 @@ function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
+function extractSecondCrackTime(input: Partial<Roast>): string {
+  const direct = normalizeElapsedTime((input as Roast & { secondCrackTime?: unknown }).secondCrackTime);
+  if (direct) return direct;
+  const notesMatch = String(input.notes || '').match(/2nd Crack:\s*([0-9]{1,3}:[0-9]{2})/i);
+  return normalizeElapsedTime(notesMatch?.[1]);
+}
+
 function normalizeBean(bean: Partial<Bean>): Bean {
   const initialWeight = toNumber(bean.initialWeight, toNumber((bean as { stockWeight?: unknown }).stockWeight));
   const currentWeight = toNumber(bean.currentWeight, toNumber((bean as { stockWeight?: unknown }).stockWeight, initialWeight));
@@ -179,8 +226,9 @@ function normalizeBean(bean: Partial<Bean>): Bean {
 function normalizeRoast(roast: Partial<Roast>): Roast {
   const greenWeight = toNumber(roast.greenWeight, toNumber((roast as { inputWeight?: unknown }).inputWeight));
   const roastedWeight = toNumber(roast.roastedWeight, toNumber((roast as { expectedOutputWeight?: unknown }).expectedOutputWeight));
-  const firstCrackTime = roast.firstCrackTime ? String(roast.firstCrackTime) : null;
-  const dropTime = String(roast.dropTime || '');
+  const firstCrackTime = normalizeElapsedTime(roast.firstCrackTime) || null;
+  const secondCrackTime = extractSecondCrackTime(roast) || null;
+  const dropTime = normalizeElapsedTime(roast.dropTime);
   const firstCrackStatus = roast.firstCrackStatus || (firstCrackTime ? 'recorded' : 'unknown');
   return {
     id: String(roast.id || ''),
@@ -188,17 +236,29 @@ function normalizeRoast(roast: Partial<Roast>): Roast {
     roastDate: normalizeDateOnly(roast.roastDate),
     greenWeight,
     roastedWeight,
-    yellowTime: String(roast.yellowTime || ''),
+    yellowTime: normalizeElapsedTime(roast.yellowTime),
     firstCrackTime,
     firstCrackStatus,
+    secondCrackTime,
     dropTime,
-    developmentTime: firstCrackTime ? (roast.developmentTime || calculateDevTime(firstCrackTime, dropTime)) : null,
+    developmentTime: firstCrackTime ? (normalizeElapsedTime(roast.developmentTime) || calculateDevTime(firstCrackTime, dropTime)) : null,
     developmentRatio: firstCrackTime ? toNullableNumber(roast.developmentRatio, calculateDevRatio(firstCrackTime, dropTime)) : null,
     lossRatio: toNumber(roast.lossRatio, calculateLossRatio(greenWeight, roastedWeight)),
     status: (roast.status || 'roasted') as RoastStatus,
     notes: String(roast.notes || ''),
     createdAt: String(roast.createdAt || new Date().toISOString()),
     updatedAt: roast.updatedAt,
+  };
+}
+
+function normalizeRoastStep(step: Partial<RoastStep>, fallbackRoastId = '', index = 0): RoastStep {
+  return {
+    id: String(step.id || `step_${fallbackRoastId || 'unknown'}_${index}`),
+    roastId: String(step.roastId || fallbackRoastId),
+    time: normalizeElapsedTime(step.time) || '00:00',
+    heat: toNumber(step.heat),
+    air: toNumber(step.air),
+    memo: String(step.memo || ''),
   };
 }
 
@@ -236,7 +296,7 @@ function normalizeTasting(tasting: Partial<Tasting>, roast?: Roast): Tasting {
     flavors: normalizeStringArray(tasting.flavors),
     negatives: normalizeStringArray(tasting.negatives),
     improvements: String(tasting.improvements || ''),
-    impressionColor: String(tasting.impressionColor || '#D09B6A'),
+    impressionColor: String(tasting.impressionColor || '#00DFFF'),
     notes: String(tasting.notes || ''),
     photos: normalizeStringArray(tasting.photos),
     status: tasting.status === 'pending' ? 'pending' : 'completed',
@@ -270,7 +330,7 @@ function normalizeExternalCoffee(input: Partial<ExternalCoffee>): ExternalCoffee
     tastingDate: normalizeDateOnly(input.tastingDate) || todayDateString(),
     brewMethod: String(input.brewMethod || ''),
     score: toNumber(input.score),
-    impressionColor: String(input.impressionColor || '#D09B6A'),
+    impressionColor: String(input.impressionColor || '#00DFFF'),
     notes: String(input.notes || ''),
     createdAt: String(input.createdAt || new Date().toISOString()),
     updatedAt: input.updatedAt,
@@ -339,6 +399,7 @@ async function postCloudSync(payload: CloudSyncPayload, queueOnFail = true): Pro
     if (!response.ok || data?.ok === false) {
       throw new Error(data?.error || `Google Sheets sync failed: ${response.status}`);
     }
+    localStorage.setItem(STORAGE_KEYS.LAST_SYNC, String(Date.now()));
     return { ok: true };
   } catch (error) {
     if (queueOnFail) enqueuePendingSync(payload);
@@ -468,7 +529,12 @@ export const DBService = {
   },
 
   saveRoastToCloud(roast: Roast, steps: RoastStep[]): Promise<CloudSyncResult> {
-    return postCloudSync({ action: 'upsertRoast', roast: normalizeRoast(roast), steps });
+    const normalized = normalizeRoast(roast);
+    return postCloudSync({
+      action: 'upsertRoast',
+      roast: normalized,
+      steps: steps.map((step, index) => normalizeRoastStep(step, normalized.id, index)),
+    });
   },
 
   deleteRoastFromCloud(id: string): Promise<CloudSyncResult> {
@@ -487,7 +553,9 @@ export const DBService = {
   },
 
   getAllRoastSteps(): RoastStep[] {
-    return getLocalData<RoastStep>(STORAGE_KEYS.STEPS, []);
+    const steps = getLocalData<RoastStep>(STORAGE_KEYS.STEPS, []).map((step, index) => normalizeRoastStep(step, step.roastId, index));
+    saveLocalData(STORAGE_KEYS.STEPS, steps);
+    return steps;
   },
 
   getRoastSteps(roastId: string): RoastStep[] {
@@ -500,7 +568,7 @@ export const DBService = {
     const allSteps = this.getAllRoastSteps().filter(step => step.roastId !== roastId);
     const updated = [
       ...allSteps,
-      ...steps.map((step, index) => ({ ...step, id: step.id || `step_${roastId}_${Date.now()}_${index}`, roastId })),
+      ...steps.map((step, index) => normalizeRoastStep({ ...step, id: step.id || `step_${roastId}_${Date.now()}_${index}`, roastId }, roastId, index)),
     ];
     saveLocalData(STORAGE_KEYS.STEPS, updated);
   },
@@ -589,11 +657,14 @@ export const DBService = {
   async syncFromCloud(): Promise<CloudSyncResult> {
     const pending = getPendingSyncPayloads();
     if (pending.length > 0) {
-      return {
-        ok: false,
-        pending: true,
-        error: '未同期の変更があります。再送が成功するまでGoogle Sheetsの内容で上書きしません。',
-      };
+      const retry = await this.retryPendingSync();
+      if (!retry.ok) {
+        return {
+          ok: false,
+          pending: true,
+          error: retry.error || '未同期の変更があります。再送が成功するまでGoogle Sheetsの内容で上書きしません。',
+        };
+      }
     }
 
     const startedAt = Date.now();

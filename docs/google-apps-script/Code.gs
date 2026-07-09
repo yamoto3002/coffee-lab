@@ -36,6 +36,7 @@ const SHEETS = {
       'yellowTime',
       'firstCrackTime',
       'firstCrackStatus',
+      'secondCrackTime',
       'dropTime',
       'developmentTime',
       'developmentRatio',
@@ -82,6 +83,9 @@ const SHEETS = {
     ],
   },
 };
+
+const DATE_HEADERS = ['purchaseDate', 'roastDate', 'tastingDate'];
+const TIME_HEADERS = ['yellowTime', 'firstCrackTime', 'secondCrackTime', 'dropTime', 'developmentTime', 'time'];
 
 function doGet(e) {
   try {
@@ -253,10 +257,18 @@ function getRowsAsObjects(sheetName) {
       const item = {};
       headers.forEach(function(header, index) {
         if (!header) return;
-        item[header] = row[index] instanceof Date ? formatDateOnly(row[index]) : row[index];
+        item[header] = normalizeCellForHeader(header, row[index]);
       });
       return item;
     });
+}
+
+function normalizeCellForHeader(header, value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (DATE_HEADERS.indexOf(header) >= 0) return normalizeDateOnly(value);
+  if (TIME_HEADERS.indexOf(header) >= 0) return normalizeElapsedTime(value);
+  if (value instanceof Date) return value.toISOString();
+  return value;
 }
 
 function appendRow(sheetName, item, failIfExists) {
@@ -370,22 +382,27 @@ function normalizeBean(input) {
 
 function normalizeRoast(input) {
   const now = new Date().toISOString();
+  const firstCrackTime = normalizeElapsedTime(input.firstCrackTime);
+  const secondCrackTime = normalizeElapsedTime(firstDefined(input.secondCrackTime, readSecondCrackFromTimeline(input.timelineJson)));
+  const dropTime = normalizeElapsedTime(input.dropTime);
+  const timelineJson = normalizeTimelineJson(input.timelineJson, secondCrackTime);
   return {
     id: String(input.id || ''),
     roastDate: normalizeDateOnly(input.roastDate),
     beanId: String(input.beanId || ''),
     greenWeight: toNumber(firstDefined(input.greenWeight, input.inputWeight)),
     roastedWeight: toNumber(firstDefined(input.roastedWeight, input.expectedOutputWeight)),
-    yellowTime: String(input.yellowTime || ''),
-    firstCrackTime: String(input.firstCrackTime || ''),
-    firstCrackStatus: String(input.firstCrackStatus || (input.firstCrackTime ? 'recorded' : 'unknown')),
-    dropTime: String(input.dropTime || ''),
-    developmentTime: String(input.developmentTime || ''),
+    yellowTime: normalizeElapsedTime(input.yellowTime),
+    firstCrackTime: firstCrackTime,
+    firstCrackStatus: String(input.firstCrackStatus || (firstCrackTime ? 'recorded' : 'unknown')),
+    secondCrackTime: secondCrackTime,
+    dropTime: dropTime,
+    developmentTime: normalizeElapsedTime(input.developmentTime),
     developmentRatio: input.developmentRatio === '' || input.developmentRatio === null || input.developmentRatio === undefined ? '' : toNumber(input.developmentRatio),
     lossRatio: toNumber(input.lossRatio),
     status: String(input.status || 'roasted'),
     notes: String(input.notes || ''),
-    timelineJson: String(input.timelineJson || '{"steps":[]}'),
+    timelineJson: timelineJson,
     createdAt: String(input.createdAt || now),
     updatedAt: now,
   };
@@ -417,7 +434,7 @@ function normalizeTasting(input) {
     flavors: String(input.flavors || '[]'),
     negatives: String(input.negatives || '[]'),
     improvements: String(input.improvements || ''),
-    impressionColor: String(input.impressionColor || '#D09B6A'),
+    impressionColor: String(input.impressionColor || '#00DFFF'),
     notes: String(input.notes || ''),
     photos: String(input.photos || '[]'),
     status: String(input.status || 'completed'),
@@ -426,17 +443,100 @@ function normalizeTasting(input) {
   };
 }
 
+function normalizeTimelineJson(raw, secondCrackTime) {
+  let parsed = {};
+  try {
+    parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+  } catch (error) {
+    parsed = {};
+  }
+  if (Array.isArray(parsed)) parsed = { steps: parsed };
+  const steps = Array.isArray(parsed.steps) ? parsed.steps.map(function(step) {
+    return {
+      id: String(step.id || ''),
+      roastId: String(step.roastId || ''),
+      time: normalizeElapsedTime(step.time),
+      heat: toNumber(step.heat),
+      air: toNumber(step.air),
+      memo: String(step.memo || ''),
+    };
+  }) : [];
+  return JSON.stringify({
+    steps: steps,
+    secondCrackTime: normalizeElapsedTime(secondCrackTime || parsed.secondCrackTime),
+  });
+}
+
+function readSecondCrackFromTimeline(raw) {
+  try {
+    const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    if (parsed && !Array.isArray(parsed)) return parsed.secondCrackTime || '';
+  } catch (error) {
+    return '';
+  }
+  return '';
+}
+
 function normalizeDateOnly(value) {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return formatDateOnly(value);
   const raw = String(value).trim();
+  if (!raw) return '';
+  if (/[T ]\d{1,2}:\d{2}/.test(raw) || /Z$/.test(raw)) {
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) return formatDateOnly(parsed);
+  }
   const match = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (!match) return raw;
   return match[1] + '-' + pad2(match[2]) + '-' + pad2(match[3]);
 }
 
+function normalizeElapsedTime(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'number' && isFinite(value)) return secondsToTime(value);
+  if (value instanceof Date) return formatDateAsElapsedTime(value);
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^\d+$/.test(raw)) return secondsToTime(Number(raw));
+
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw) || /Z$/.test(raw)) {
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) return formatDateAsElapsedTime(parsed);
+  }
+
+  const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (hms) {
+    const first = Number(hms[1]);
+    const second = Number(hms[2]);
+    const third = Number(hms[3]);
+    if (first === 0) return secondsToTime(second * 60 + third);
+    return pad2(first) + ':' + pad2(second);
+  }
+
+  const ms = raw.match(/^(\d{1,3}):(\d{1,2})$/);
+  if (ms) return pad2(ms[1]) + ':' + pad2(Math.min(59, Number(ms[2])));
+
+  return raw;
+}
+
 function formatDateOnly(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function formatDateAsElapsedTime(date) {
+  const hour = Number(Utilities.formatDate(date, Session.getScriptTimeZone(), 'H'));
+  const minute = Number(Utilities.formatDate(date, Session.getScriptTimeZone(), 'm'));
+  const second = Number(Utilities.formatDate(date, Session.getScriptTimeZone(), 's'));
+  if (hour === 0) return secondsToTime(minute * 60 + second);
+  return pad2(hour) + ':' + pad2(minute);
+}
+
+function secondsToTime(seconds) {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return pad2(mins) + ':' + pad2(secs);
 }
 
 function pad2(value) {

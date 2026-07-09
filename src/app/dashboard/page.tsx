@@ -1,167 +1,199 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, BarChart2, Coffee, Flame, Palette, Star, TrendingUp } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BarChart2, CalendarDays, Flame, Lightbulb, RefreshCw, TestTube2 } from 'lucide-react';
 import { DBService } from '@/lib/db';
-import { parseDateOnly } from '@/lib/date';
-import { AppSettings, Bean, Roast, Tasting } from '@/types';
+import { addDateDays, todayDateString } from '@/lib/date';
+import { Bean, Roast, Tasting } from '@/types';
+
+type CalendarItem = {
+  id: string;
+  label: string;
+  href: string;
+  type: 'roast' | 'tasting';
+  color: string;
+};
 
 export default function DashboardPage() {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [roasts, setRoasts] = useState<Roast[]>([]);
   const [tastings, setTastings] = useState<Tasting[]>([]);
-  const [settings, setSettings] = useState<AppSettings>(() => DBService.getSettings());
+  const [syncMessage, setSyncMessage] = useState('ローカル準備完了');
 
-  useEffect(() => {
+  const loadLocal = useCallback(() => {
     setBeans(DBService.getBeans());
     setRoasts(DBService.getRoasts());
     setTastings(DBService.getTastings());
-    setSettings(DBService.getSettings());
   }, []);
 
+  const syncFromCloud = useCallback(async () => {
+    setSyncMessage('同期中');
+    const result = await DBService.syncFromCloud();
+    loadLocal();
+    setSyncMessage(result.ok ? `同期済み ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}` : result.error || 'Google Sheetsとの同期に失敗しました。');
+  }, [loadLocal]);
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => {
+      loadLocal();
+      void syncFromCloud();
+    }, 0);
+    const timer = window.setInterval(() => void syncFromCloud(), 60000);
+    window.addEventListener('online', syncFromCloud);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+      window.removeEventListener('online', syncFromCloud);
+    };
+  }, [loadLocal, syncFromCloud]);
+
   const completedTastings = tastings.filter(tasting => tasting.status === 'completed');
-  const hasAnalysisData = completedTastings.length > 0 || roasts.length > 0;
+  const latestRoast = useMemo(() => [...roasts].sort((a, b) => b.id.localeCompare(a.id))[0], [roasts]);
+  const tastingTarget = useMemo(() => roasts.find(roast => !tastings.some(tasting => tasting.roastId === roast.id)) || latestRoast, [roasts, tastings, latestRoast]);
+  const hasAnalysisData = roasts.length > 0 || completedTastings.length > 0;
 
-  const averageScore = completedTastings.length > 0
-    ? Math.round((completedTastings.reduce((sum, tasting) => sum + tasting.score, 0) / completedTastings.length) * 10) / 10
-    : null;
+  const insights = useMemo(() => {
+    const list: { title: string; body: string; href: string; color: string }[] = [];
+    const firstCrackMissing = roasts.find(roast => !roast.firstCrackTime || roast.firstCrackStatus === 'not_detected' || roast.firstCrackStatus === 'unknown');
+    const highLoss = [...roasts].filter(roast => roast.lossRatio >= 18).sort((a, b) => b.lossRatio - a.lossRatio)[0];
+    const day7 = roasts.find(roast => addDateDays(roast.roastDate, 7) === todayDateString());
+    const untasted = roasts.find(roast => !tastings.some(tasting => tasting.roastId === roast.id));
 
-  const monthlyRoastsCount = roasts.filter(roast => {
-    const date = parseDateOnly(roast.roastDate);
-    const now = new Date();
-    return !!date && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  }).length;
-
-  const agingData = useMemo(() => {
-    const days = Array.from(new Set(completedTastings.map(tasting => tasting.dayAfterRoast))).sort((a, b) => a - b);
-    return days.map(day => {
-      const list = completedTastings.filter(tasting => tasting.dayAfterRoast === day);
-      const score = list.length ? Math.round((list.reduce((sum, tasting) => sum + tasting.score, 0) / list.length) * 10) / 10 : 0;
-      return { name: `Day ${day}`, score };
-    }).filter(item => item.score > 0);
-  }, [completedTastings]);
-
-  const beanScores = useMemo(() => {
-    return beans.map(bean => {
-      const roastIds = roasts.filter(roast => roast.beanId === bean.id).map(roast => roast.id);
-      const beanTastings = completedTastings.filter(tasting => roastIds.includes(tasting.roastId));
-      const avg = beanTastings.length ? Math.round((beanTastings.reduce((sum, tasting) => sum + tasting.score, 0) / beanTastings.length) * 10) / 10 : 0;
-      return { name: bean.name.length > 14 ? `${bean.name.slice(0, 14)}...` : bean.name, score: avg, color: bean.themeColor || '#D09B6A' };
-    }).filter(item => item.score > 0);
-  }, [beans, roasts, completedTastings]);
-
-  const lossByBean = useMemo(() => {
-    return beans.map(bean => {
-      const beanRoasts = roasts.filter(roast => roast.beanId === bean.id && roast.lossRatio > 0);
-      const avg = beanRoasts.length ? Math.round((beanRoasts.reduce((sum, roast) => sum + roast.lossRatio, 0) / beanRoasts.length) * 10) / 10 : 0;
-      return { name: bean.name.length > 14 ? `${bean.name.slice(0, 14)}...` : bean.name, loss: avg };
-    }).filter(item => item.loss > 0);
-  }, [beans, roasts]);
-
-  const firstCrackMissingCount = roasts.filter(roast => !roast.firstCrackTime || roast.firstCrackStatus === 'not_detected').length;
-  const impressionColors = useMemo(() => {
-    const map = new Map<string, number>();
-    completedTastings.forEach(tasting => {
-      const color = tasting.impressionColor || '#D09B6A';
-      map.set(color, (map.get(color) || 0) + 1);
+    if (untasted) {
+      list.push({
+        title: 'これをテイスティングしてみませんか？',
+        body: `${untasted.id} はまだ味の記録がありません。今日の印象を残せます。`,
+        href: `/roasts/${untasted.id}/tasting/new`,
+        color: '#00DFFF',
+      });
+    }
+    if (day7) {
+      list.push({
+        title: 'Day7の豆があります',
+        body: `${day7.id} は焙煎から7日目です。香りの開き方を見るのに良いタイミングです。`,
+        href: `/roasts/${day7.id}/tasting/new`,
+        color: '#FB3D71',
+      });
+    }
+    if (highLoss) {
+      list.push({
+        title: 'Lossが高めの焙煎があります',
+        body: `${highLoss.id} はLoss ${highLoss.lossRatio}%です。火力推移とDrop時刻を見返せます。`,
+        href: `/roasts/${highLoss.id}`,
+        color: '#FF8A3D',
+      });
+    }
+    if (firstCrackMissing) {
+      list.push({
+        title: '1st Crack未記録の焙煎があります',
+        body: `${firstCrackMissing.id} はDevが不明です。次回の観察ポイントにできます。`,
+        href: `/roasts/${firstCrackMissing.id}`,
+        color: '#8B5CF6',
+      });
+    }
+    if (list.length === 0 && latestRoast) {
+      list.push({
+        title: '最近焙煎した豆があります',
+        body: `${latestRoast.id} の条件をベースに、次の仮説を作れます。`,
+        href: `/roasts/${latestRoast.id}`,
+        color: '#00DFFF',
+      });
+    }
+    list.push({
+      title: 'コーヒー豆知識',
+      body: '同じ焙煎でもDay3とDay7で酸の見え方が変わります。味の変化は別記録で残すと比較しやすいです。',
+      href: '/roasts',
+      color: '#22C55E',
     });
-    return Array.from(map.entries()).map(([color, count]) => ({ color, count }));
-  }, [completedTastings]);
+    return list.slice(0, 4);
+  }, [roasts, tastings, latestRoast]);
+
+  const beanTotals = useMemo(() => beans.map(bean => {
+    const beanRoasts = roasts.filter(roast => roast.beanId === bean.id);
+    const total = beanRoasts.reduce((sum, roast) => sum + roast.greenWeight, 0);
+    const latest = [...beanRoasts].sort((a, b) => b.id.localeCompare(a.id))[0];
+    return {
+      bean,
+      count: beanRoasts.length,
+      total: Math.round(total * 10) / 10,
+      latest,
+    };
+  }).filter(item => item.count > 0).sort((a, b) => b.total - a.total), [beans, roasts]);
+
+  const calendar = useMemo(() => buildCalendar(roasts, beans), [roasts, beans]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-[#232326] bg-[#0E0E10] px-6 py-4">
-        <h1 className="text-xl font-bold tracking-wide">分析</h1>
-        <p className="text-xs text-[#8E8E93]">実データだけを使った焙煎とテイスティングの振り返り</p>
+    <div className="lab-shell flex min-h-screen flex-col">
+      <header className="flex flex-col gap-4 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-6">
+        <div>
+          <h1 className="text-xl font-bold tracking-wide">分析</h1>
+          <p className="text-xs text-slate-400">焙煎の振り返りと次の行動</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">{syncMessage}</span>
+          <button onClick={syncFromCloud} className="tap-button rounded-xl bg-white/[0.06] p-2 text-slate-300 hover:text-white" aria-label="再同期">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <Link href={tastingTarget ? `/roasts/${tastingTarget.id}/tasting/new` : '/roasts'} className="tap-button inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">
+            <TestTube2 className="h-4 w-4" />
+            テイスティングを記録
+          </Link>
+        </div>
       </header>
 
-      <div className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 pb-28">
+      <div className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 pb-28 md:p-6">
         {!hasAnalysisData ? (
-          <div className="flex min-h-[55vh] flex-col items-center justify-center rounded-2xl border border-dashed border-[#232326] bg-[#131315] p-8 text-center">
-            <BarChart2 className="mb-4 h-10 w-10 text-[#D09B6A]" />
+          <div className="lab-card flex min-h-[55vh] flex-col items-center justify-center rounded-2xl p-8 text-center">
+            <BarChart2 className="mb-4 h-10 w-10 text-cyan-200" />
             <h2 className="text-xl font-bold">分析できるデータがまだありません</h2>
-            <p className="mt-2 max-w-md text-sm leading-relaxed text-[#8E8E93]">サンプル値は表示しません。焙煎ログやテイスティングを保存すると、ここに傾向が出ます。</p>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">焙煎ログやテイスティングを保存すると、ここに提案・カレンダー・豆別集計が出ます。</p>
             <div className="mt-6 flex gap-3">
-              <Link href="/beans" className="rounded-lg border border-[#232326] px-4 py-2 text-sm font-semibold text-[#E4E4E7]">生豆を登録</Link>
-              <Link href="/roasts/new" className="rounded-lg bg-[#D09B6A] px-4 py-2 text-sm font-semibold text-[#0B0B0C]">焙煎する</Link>
+              <Link href="/beans" className="tap-button rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">生豆を登録</Link>
+              <Link href="/roasts/new" className="tap-button rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">焙煎する</Link>
             </div>
           </div>
         ) : (
           <>
-            <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-              <Metric icon={<Coffee className="h-4 w-4" />} label="生豆" value={`${beans.length}`} />
-              <Metric icon={<Flame className="h-4 w-4" />} label="焙煎ログ" value={`${roasts.length}`} />
-              <Metric icon={<Star className="h-4 w-4" />} label="平均評価" value={averageScore === null ? '-' : `${averageScore}`} accent />
-              <Metric icon={<TrendingUp className="h-4 w-4" />} label="今月の焙煎" value={`${monthlyRoastsCount}`} />
-              <Metric icon={<AlertCircle className="h-4 w-4" />} label="1st不明" value={`${firstCrackMissingCount}`} />
+            <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {insights.map(item => (
+                <Link key={item.title} href={item.href} className="tap-button lab-card-soft rounded-xl p-5" style={{ borderColor: `${item.color}44` }}>
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: `${item.color}18`, color: item.color }}>
+                    <Lightbulb className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-base font-semibold leading-snug">{item.title}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.body}</p>
+                </Link>
+              ))}
             </section>
 
-            {settings.showAnalysisCards && (
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <ChartPanel title="Day別 平均評価">
-                  {agingData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={agingData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#232326" />
-                        <XAxis dataKey="name" stroke="#8E8E93" fontSize={11} />
-                        <YAxis domain={[0, 100]} stroke="#8E8E93" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#131315', borderColor: '#232326' }} />
-                        <Line type="monotone" dataKey="score" name="平均スコア" stroke="#D09B6A" strokeWidth={3} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : <EmptyChart text="テイスティング結果がまだありません" />}
-                </ChartPanel>
+            <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="lab-card-soft rounded-xl p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#F4F4F6]"><CalendarDays className="h-4 w-4 text-cyan-200" />焙煎カレンダー</h2>
+                <CalendarGrid days={calendar.days} monthLabel={calendar.monthLabel} />
+              </div>
 
-                <ChartPanel title="豆別 平均評価">
-                  {beanScores.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={beanScores} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#232326" />
-                        <XAxis dataKey="name" stroke="#8E8E93" fontSize={10} />
-                        <YAxis domain={[0, 100]} stroke="#8E8E93" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#131315', borderColor: '#232326' }} />
-                        <Bar dataKey="score" name="平均スコア" fill="#D09B6A" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : <EmptyChart text="豆別に集計できる評価がありません" />}
-                </ChartPanel>
-
-                <ChartPanel title="豆別 Loss平均">
-                  {lossByBean.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={lossByBean} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#232326" />
-                        <XAxis dataKey="name" stroke="#8E8E93" fontSize={10} />
-                        <YAxis stroke="#8E8E93" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#131315', borderColor: '#232326' }} />
-                        <Bar dataKey="loss" name="Loss %" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : <EmptyChart text="Lossを集計できる焙煎がありません" />}
-                </ChartPanel>
-
-                <ChartPanel title="印象色の分布">
-                  {impressionColors.length > 0 ? (
-                    <div className="flex h-[260px] flex-wrap content-center items-center justify-center gap-3">
-                      {impressionColors.map(item => (
-                        <div key={item.color} className="flex items-center gap-2 rounded-xl border border-[#232326] bg-[#1A1A1E] px-4 py-3">
-                          <span className="h-8 w-8 rounded-full border border-white/10" style={{ backgroundColor: item.color }} />
-                          <span className="font-mono text-lg text-[#F4F4F6]">{item.count}</span>
+              <div className="lab-card-soft rounded-xl p-5">
+                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#F4F4F6]"><Flame className="h-4 w-4 text-[#FF8A3D]" />豆別の焙煎量</h2>
+                <div className="space-y-3">
+                  {beanTotals.map(item => (
+                    <Link key={item.bean.id} href={`/beans?beanId=${item.bean.id}`} className="tap-button block rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{item.bean.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">{item.bean.country} / {item.bean.process}</p>
                         </div>
-                      ))}
-                    </div>
-                  ) : <EmptyChart text="印象色つきのテイスティングがありません" />}
-                </ChartPanel>
-              </section>
-            )}
-
-            <section className="rounded-xl border border-[#232326] bg-[#131315] p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#8E8E93]"><Palette className="h-4 w-4 text-[#D09B6A]" />分析メモ</h2>
-              <p className="text-sm leading-relaxed text-[#A1A1AA]">
-                テイスティングが少ない間は、相関よりも「同じ豆のDay違い」「同じ焙煎度の飲み比べ」を増やすほうが有効です。サンプル評価は混ぜず、保存された実データだけを表示しています。
-              </p>
+                        <span className="shrink-0 rounded-full px-2 py-1 font-mono text-xs font-bold" style={{ backgroundColor: `${item.bean.themeColor || '#00DFFF'}22`, color: item.bean.themeColor || '#00DFFF' }}>{item.total}g</span>
+                      </div>
+                      <div className="mt-3 flex justify-between text-xs text-slate-400">
+                        <span>{item.count}回</span>
+                        <span>{item.latest ? `最新 ${item.latest.id}` : '-'}</span>
+                      </div>
+                    </Link>
+                  ))}
+                  {beanTotals.length === 0 && <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">豆別に集計できる焙煎がありません。</div>}
+                </div>
+              </div>
             </section>
           </>
         )}
@@ -170,27 +202,66 @@ export default function DashboardPage() {
   );
 }
 
-function Metric({ icon, label, value, accent = false }: { icon: React.ReactNode; label: string; value: string; accent?: boolean }) {
+function buildCalendar(roasts: Roast[], beans: Bean[]) {
+  const today = todayDateString();
+  const [year, month] = today.split('-').map(Number);
+  const first = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startOffset = first.getDay();
+  const itemsByDate = new Map<string, CalendarItem[]>();
+
+  roasts.forEach(roast => {
+    const bean = beans.find(item => item.id === roast.beanId);
+    const roastDate = roast.roastDate;
+    const tastingDate = addDateDays(roast.roastDate, 7);
+    if (roastDate.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+      itemsByDate.set(roastDate, [
+        ...(itemsByDate.get(roastDate) || []),
+        { id: roast.id, label: roast.id, href: `/roasts/${roast.id}`, type: 'roast', color: bean?.themeColor || '#00DFFF' },
+      ]);
+    }
+    if (tastingDate.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+      itemsByDate.set(tastingDate, [
+        ...(itemsByDate.get(tastingDate) || []),
+        { id: `${roast.id}-day7`, label: `${roast.id} D7`, href: `/roasts/${roast.id}/tasting/new`, type: 'tasting', color: '#FB3D71' },
+      ]);
+    }
+  });
+
+  const days: { date: string; day: number | null; items: CalendarItem[] }[] = [];
+  for (let i = 0; i < startOffset; i += 1) days.push({ date: '', day: null, items: [] });
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    days.push({ date, day, items: itemsByDate.get(date) || [] });
+  }
+
+  return { monthLabel: `${year}/${String(month).padStart(2, '0')}`, days };
+}
+
+function CalendarGrid({ monthLabel, days }: { monthLabel: string; days: { date: string; day: number | null; items: CalendarItem[] }[] }) {
   return (
-    <div className="rounded-xl border border-[#232326] bg-[#131315] p-4">
-      <div className="mb-2 flex items-center gap-2 text-[#8E8E93]">
-        {icon}
-        <span className="text-xs">{label}</span>
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="font-mono text-lg font-bold text-cyan-100">{monthLabel}</span>
+        <span className="text-xs text-slate-500">R:焙煎 / D7:テイスティング目安</span>
       </div>
-      <strong className={`font-mono text-3xl ${accent ? 'text-[#D09B6A]' : 'text-[#F4F4F6]'}`}>{value}</strong>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-500">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <span key={day}>{day}</span>)}
+      </div>
+      <div className="mt-2 grid grid-cols-7 gap-1">
+        {days.map((day, index) => (
+          <div key={`${day.date}-${index}`} className="min-h-20 rounded-lg border border-white/10 bg-white/[0.025] p-1.5">
+            {day.day && <span className="font-mono text-xs text-slate-300">{day.day}</span>}
+            <div className="mt-1 space-y-1">
+              {day.items.slice(0, 3).map(item => (
+                <Link key={item.id} href={item.href} className="block truncate rounded px-1.5 py-1 text-[10px] font-semibold text-[#080E14]" style={{ backgroundColor: item.color }}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
-
-function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-4 rounded-xl border border-[#232326] bg-[#131315] p-5">
-      <h2 className="text-sm font-semibold text-[#F4F4F6]">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function EmptyChart({ text }: { text: string }) {
-  return <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[#232326] text-sm text-[#8E8E93]">{text}</div>;
 }

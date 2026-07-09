@@ -19,22 +19,25 @@ function CompareContent() {
   const [tastingsByRoast, setTastingsByRoast] = useState<Record<string, Tasting[]>>({});
 
   useEffect(() => {
-    if (!idsParam) {
-      router.push('/roasts');
-      return;
-    }
-    const ids = idsParam.split(',').filter(Boolean).slice(0, 3);
-    const nextRoasts = ids.map(id => DBService.getRoastById(id)).filter(Boolean) as Roast[];
-    const nextSteps: Record<string, RoastStep[]> = {};
-    const nextTastings: Record<string, Tasting[]> = {};
-    nextRoasts.forEach(roast => {
-      nextSteps[roast.id] = DBService.getRoastSteps(roast.id);
-      nextTastings[roast.id] = DBService.getTastingsForRoast(roast.id).filter(tasting => tasting.status === 'completed');
-    });
-    setBeans(DBService.getBeans());
-    setRoasts(nextRoasts);
-    setStepsByRoast(nextSteps);
-    setTastingsByRoast(nextTastings);
+    const timer = window.setTimeout(() => {
+      if (!idsParam) {
+        router.push('/roasts');
+        return;
+      }
+      const ids = idsParam.split(',').filter(Boolean).slice(0, 3);
+      const nextRoasts = ids.map(id => DBService.getRoastById(id)).filter(Boolean) as Roast[];
+      const nextSteps: Record<string, RoastStep[]> = {};
+      const nextTastings: Record<string, Tasting[]> = {};
+      nextRoasts.forEach(roast => {
+        nextSteps[roast.id] = DBService.getRoastSteps(roast.id);
+        nextTastings[roast.id] = DBService.getTastingsForRoast(roast.id).filter(tasting => tasting.status === 'completed');
+      });
+      setBeans(DBService.getBeans());
+      setRoasts(nextRoasts);
+      setStepsByRoast(nextSteps);
+      setTastingsByRoast(nextTastings);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [idsParam, router]);
 
   const chartData = useMemo(() => {
@@ -55,7 +58,7 @@ function CompareContent() {
     });
   }, [roasts, stepsByRoast]);
 
-  const colors = ['#D09B6A', '#3B82F6', '#22C55E'];
+  const colors = ['#00DFFF', '#FB3D71', '#FF8A3D'];
   const beanName = (beanId: string) => {
     const bean = beans.find(item => item.id === beanId);
     return bean ? `[${bean.country}] ${bean.name}` : 'Unknown Bean';
@@ -64,81 +67,67 @@ function CompareContent() {
   if (roasts.length === 0) return null;
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-[#232326] bg-[#0E0E10] px-6 py-4">
-        <Link href="/roasts" className="rounded-lg p-1.5 text-[#8E8E93] hover:bg-[#232326] hover:text-[#F4F4F6]">
+    <div className="lab-shell flex min-h-screen flex-col">
+      <header className="flex items-center gap-3 border-b border-white/10 bg-[#080E14]/95 px-6 py-4 backdrop-blur">
+        <Link href="/roasts" className="tap-button rounded-lg p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
           <h1 className="text-xl font-bold tracking-wide">焙煎プロファイル比較</h1>
-          <p className="text-xs text-[#8E8E93]">選択したバッチの火力・風量・評価を並べて確認</p>
+          <p className="text-xs text-slate-400">選択したバッチの火力・風量・評価を並べます</p>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-6 pb-28">
-        <section className="rounded-xl border border-[#232326] bg-[#131315] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[#F4F4F6]">火力・風量の重ね合わせ</h2>
-          <div className="h-80">
+      <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 pb-28 md:p-6">
+        <section className="lab-card-soft rounded-xl p-5">
+          <h2 className="mb-4 text-sm font-semibold text-[#F4F4F6]">火力と風量の重ね合わせ</h2>
+          <div className="h-[360px]">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#232326" />
-                  <XAxis dataKey="secs" type="number" tickFormatter={value => secondsToTime(Number(value))} stroke="#8E8E93" fontSize={11} />
-                  <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="#8E8E93" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: '#131315', borderColor: '#232326' }} labelFormatter={value => secondsToTime(Number(value))} />
-                  <Legend verticalAlign="top" height={36} iconType="circle" />
+                <LineChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                  <XAxis dataKey="secs" type="number" domain={[0, 'dataMax + 30']} tickFormatter={value => secondsToTime(Number(value))} stroke="#94A3B8" fontSize={11} />
+                  <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="#94A3B8" fontSize={11} />
+                  <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#243149', color: '#F4F4F6' }} labelFormatter={value => secondsToTime(Number(value))} />
+                  <Legend />
                   {roasts.map((roast, index) => (
-                    <Line key={`heat_${roast.id}`} type="stepAfter" dataKey={`heat_${roast.id}`} name={`${roast.id} 火力`} stroke={colors[index]} strokeWidth={2.5} dot={false} />
+                    <Line key={`heat-${roast.id}`} type="stepAfter" dataKey={`heat_${roast.id}`} name={`${roast.id} 火力`} stroke={colors[index % colors.length]} strokeWidth={2.4} dot={false} />
                   ))}
                   {roasts.map((roast, index) => (
-                    <Line key={`air_${roast.id}`} type="stepAfter" dataKey={`air_${roast.id}`} name={`${roast.id} 風量`} stroke={colors[index]} strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                    <Line key={`air-${roast.id}`} type="stepAfter" dataKey={`air_${roast.id}`} name={`${roast.id} 風量`} stroke={colors[index % colors.length]} strokeDasharray="5 5" strokeWidth={2} dot={false} />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-sm text-[#8E8E93]">比較できるタイムラインがありません。</div>}
+            ) : <div className="flex h-full items-center justify-center text-sm text-slate-500">比較できるタイムラインがありません。</div>}
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <section className="grid gap-4 lg:grid-cols-3">
           {roasts.map((roast, index) => {
             const tastings = tastingsByRoast[roast.id] || [];
+            const topTasting = [...tastings].sort((a, b) => b.score - a.score)[0];
             return (
-              <article key={roast.id} className="flex flex-col overflow-hidden rounded-xl border bg-[#131315]" style={{ borderColor: colors[index] }}>
-                <div className="border-b border-[#232326] px-5 py-4 text-center" style={{ backgroundColor: `${colors[index]}14` }}>
-                  <span className="font-mono text-lg font-black" style={{ color: colors[index] }}>{roast.id}</span>
-                  <span className="mt-0.5 block text-xs text-[#8E8E93]">{formatDate(roast.roastDate)}</span>
-                </div>
-                <div className="flex-1 space-y-5 p-5 text-sm">
+              <Link key={roast.id} href={`/roasts/${roast.id}`} className="tap-button lab-card-soft rounded-xl p-5" style={{ borderColor: `${colors[index % colors.length]}44` }}>
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="block text-[10px] uppercase tracking-wider text-[#8E8E93]">使用生豆</span>
-                    <h3 className="mt-1 font-bold text-[#F4F4F6]">{beanName(roast.beanId)}</h3>
+                    <h2 className="font-mono text-xl font-bold" style={{ color: colors[index % colors.length] }}>{roast.id}</h2>
+                    <span className="mt-0.5 block text-xs text-slate-400">{formatDate(roast.roastDate)}</span>
                   </div>
-                  <div className="space-y-2 border-t border-[#232326] pt-4 font-mono text-xs">
-                    <Row label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
-                    <Row label="Loss" value={`${roast.lossRatio}%`} />
-                    <Row label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentTime} / ${roast.developmentRatio}%`} accent />
-                    <Row label="1st / Drop" value={`${roast.firstCrackTime || '不明'} / ${roast.dropTime || '-'}`} />
-                  </div>
-                  <div className="space-y-3 border-t border-[#232326] pt-4">
-                    {tastings.length === 0 ? (
-                      <p className="rounded-lg bg-[#1A1A1E] p-3 text-xs text-[#8E8E93]">テイスティングなし</p>
-                    ) : tastings.map(tasting => (
-                      <div key={tasting.id} className="rounded-lg bg-[#1A1A1E] p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-[#8E8E93]">#{tasting.tastingIndex} / Day {tasting.dayAfterRoast}</span>
-                          <strong className="font-mono text-[#D09B6A]">{tasting.score}点</strong>
-                        </div>
-                        <div className="mt-2 flex text-[#D09B6A]">
-                          {Array.from({ length: tasting.recommendationRating }).map((_, starIndex) => <Star key={starIndex} className="h-3 w-3 fill-current" />)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {topTasting && <strong className="font-mono text-2xl" style={{ color: topTasting.impressionColor }}>{topTasting.score}</strong>}
                 </div>
-                <div className="border-t border-[#232326] p-4">
-                  <Link href={`/roasts/${roast.id}`} className="flex items-center justify-center rounded-lg bg-[#1C1C1F] py-2 text-xs font-semibold">詳細を開く</Link>
+                <p className="mt-3 text-sm font-semibold text-[#F4F4F6]">{beanName(roast.beanId)}</p>
+                <div className="mt-4 space-y-2 text-sm">
+                  <Row label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
+                  <Row label="Loss" value={`${roast.lossRatio}%`} />
+                  <Row label="1st / 2nd / Drop" value={`${roast.firstCrackTime || '不明'} / ${roast.secondCrackTime || '-'} / ${roast.dropTime || '-'}`} />
+                  <Row label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} />
                 </div>
-              </article>
+                {topTasting && (
+                  <div className="mt-4 flex" style={{ color: topTasting.impressionColor }}>
+                    {Array.from({ length: topTasting.recommendationRating }).map((_, star) => <Star key={star} className="h-3 w-3 fill-current" />)}
+                  </div>
+                )}
+              </Link>
             );
           })}
         </section>
@@ -147,18 +136,18 @@ function CompareContent() {
   );
 }
 
-function Row({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3">
-      <span className="text-[#8E8E93]">{label}</span>
-      <span className={accent ? 'font-bold text-[#D09B6A]' : 'text-[#F4F4F6]'}>{value}</span>
+    <div className="flex justify-between gap-3 border-b border-white/10 pb-1">
+      <span className="text-slate-500">{label}</span>
+      <strong className="text-right font-mono text-[#F4F4F6]">{value}</strong>
     </div>
   );
 }
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[#8E8E93]">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-slate-500">Loading...</div>}>
       <CompareContent />
     </Suspense>
   );
