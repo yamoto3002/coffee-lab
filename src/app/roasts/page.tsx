@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Calendar, ChevronRight, Flame, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
+import SyncStatus from '@/components/SyncStatus';
 import { DBService, getAgingDays } from '@/lib/db';
 import { formatDate } from '@/lib/date';
 import { Bean, Roast, Tasting } from '@/types';
@@ -84,7 +86,7 @@ export default function RoastsPage() {
           <p className="text-xs text-slate-400">ID順で追えるシンプルな焙煎ログ</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">{syncMessage}</span>
+          <SyncStatus message={syncMessage} tone={syncMessage.includes('失敗') ? 'error' : syncMessage.includes('同期中') ? 'syncing' : 'idle'} compact />
           <button onClick={syncFromCloud} className="tap-button rounded-xl bg-white/[0.06] p-2 text-slate-300 hover:text-white" aria-label="再同期">
             <RefreshCw className="h-4 w-4" />
           </button>
@@ -118,7 +120,7 @@ export default function RoastsPage() {
 
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-4 pb-24 md:p-6">
         {sortedRoasts.length === 0 ? (
-          <div className="lab-card py-20 text-center text-sm text-slate-500">焙煎記録がありません。</div>
+          <EmptyState title="まだ焙煎記録がありません" message="最初の実験を保存すると、ここにプロファイル・テイスティング・比較の流れが育ちます。" actionLabel="Live Roastを開始" actionHref="/roasts/new" />
         ) : (
           sortedRoasts.map(roast => {
             const bean = beanFor(roast.beanId);

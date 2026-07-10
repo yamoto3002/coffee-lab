@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, ArrowLeft, Cloud, Download, FileText, RefreshCw, ShieldAlert, Upload } from 'lucide-react';
+import { ArrowLeft, Cloud, Download, FileText, RefreshCw, ShieldAlert, Upload } from 'lucide-react';
+import SyncStatus from '@/components/SyncStatus';
 import { DBService } from '@/lib/db';
 import { Bean, Roast, Tasting } from '@/types';
 
@@ -116,12 +117,7 @@ export default function SettingsPage() {
       </header>
 
       <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 pb-24 md:p-6">
-        {message && (
-          <div className={`flex items-center gap-2 rounded-lg border p-4 text-sm ${message.type === 'success' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-200' : 'border-red-300/20 bg-red-400/10 text-red-200'}`}>
-            <AlertCircle className="h-5 w-5" />
-            {message.text}
-          </div>
-        )}
+        {message && <div className="lab-card-soft rounded-2xl px-4 py-3"><SyncStatus message={message.text} tone={message.type === 'success' ? 'success' : 'error'} /></div>}
 
         {view === 'main' && (
           <>

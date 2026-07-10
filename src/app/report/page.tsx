@@ -36,23 +36,23 @@ export default function ReportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F3EE] text-[#1C1713] print:bg-white">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[#D8CFC5] bg-[#F7F3EE]/95 px-6 py-4 print:hidden">
-        <Link href="/settings" className="flex items-center gap-2 text-sm font-semibold text-[#5B4533]">
+    <div className="lab-shell min-h-screen print:bg-white print:text-black">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#080b14]/88 px-5 py-4 backdrop-blur-xl print:hidden md:px-8">
+        <Link href="/settings" className="tap-button flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-cyan-100">
           <ArrowLeft className="h-4 w-4" />
           設定へ戻る
         </Link>
-        <button onClick={() => window.print()} className="flex items-center gap-2 rounded-lg bg-[#1C1713] px-4 py-2 text-sm font-semibold text-white">
+        <button onClick={() => window.print()} className="btn-primary tap-button flex items-center gap-2">
           <Printer className="h-4 w-4" />
           印刷 / PDF保存
         </button>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-10 print:px-0">
+      <main className="mx-auto max-w-5xl space-y-8 px-5 py-9 pb-28 print:px-0 md:px-8">
         <section className="space-y-3">
-          <p className="text-sm uppercase tracking-[0.2em] text-[#8B6B51]">Coffee Lab Report</p>
-          <h1 className="text-4xl font-bold tracking-normal">焙煎記録レポート</h1>
-          <p className="text-sm text-[#6E625A]">出力日: {formatDate(todayDateString())}</p>
+          <p className="eyebrow text-cyan-200 print:text-slate-600">Coffee Lab Report</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-.04em] text-white print:text-black">焙煎記録レポート</h1>
+          <p className="mt-2 text-sm text-slate-400 print:text-slate-600">出力日: {formatDate(todayDateString())}</p>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-4">
@@ -119,16 +119,16 @@ export default function ReportPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {completedTastings.map(tasting => (
-                <div key={tasting.id} className="rounded-xl border border-[#D8CFC5] bg-white p-4">
+                <div key={tasting.id} className="lab-card-soft rounded-2xl p-4 print:border-slate-200 print:bg-white">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-mono text-sm font-bold">{tasting.roastId} / Day {tasting.dayAfterRoast}</p>
-                      <p className="text-xs text-[#6E625A]">{formatDate(tasting.tastingDate)}{tasting.doseGrams > 0 ? ` / ${tasting.doseGrams}g` : ''}</p>
+                      <p className="text-xs text-slate-400 print:text-slate-600">{formatDate(tasting.tastingDate)}{tasting.doseGrams > 0 ? ` / ${tasting.doseGrams}g` : ''}</p>
                     </div>
                     <strong className="font-mono text-2xl" style={{ color: tasting.impressionColor }}>{tasting.score}</strong>
                   </div>
-                  {tasting.flavors.length > 0 && <p className="mt-3 text-sm text-[#3D3027]">{tasting.flavors.join(', ')}</p>}
-                  {tasting.notes && <p className="mt-2 text-xs leading-relaxed text-[#6E625A]">{tasting.notes}</p>}
+                  {tasting.flavors.length > 0 && <p className="mt-3 text-sm text-slate-200 print:text-slate-800">{tasting.flavors.join(', ')}</p>}
+                  {tasting.notes && <p className="mt-2 text-xs leading-relaxed text-slate-400 print:text-slate-600">{tasting.notes}</p>}
                 </div>
               ))}
             </div>
@@ -140,23 +140,28 @@ export default function ReportPage() {
         .report-table {
           width: 100%;
           border-collapse: collapse;
-          background: white;
-          border: 1px solid #D8CFC5;
-          border-radius: 10px;
+          background: rgba(255,255,255,.035);
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 16px;
           overflow: hidden;
           font-size: 12px;
         }
         .report-table th,
         .report-table td {
-          border-bottom: 1px solid #E8DDD2;
+          border-bottom: 1px solid rgba(255,255,255,.08);
           padding: 10px;
           text-align: left;
           vertical-align: top;
         }
         .report-table th {
-          color: #6E625A;
-          background: #EFE7DE;
+          color: #b9c2d1;
+          background: rgba(255,255,255,.065);
           font-weight: 700;
+        }
+        @media print {
+          .report-table { background: white; border-color: #d7dce5; color: #111827; }
+          .report-table th, .report-table td { border-color: #e5e7eb; }
+          .report-table th { color: #4b5563; background: #f3f4f6; }
         }
       `}</style>
     </div>
@@ -165,9 +170,9 @@ export default function ReportPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#D8CFC5] bg-white p-4">
-      <span className="text-xs text-[#6E625A]">{label}</span>
-      <strong className="mt-1 block font-mono text-2xl">{value}</strong>
+    <div className="lab-card-soft rounded-2xl p-4 print:border-slate-200 print:bg-white">
+      <span className="text-xs text-slate-400 print:text-slate-600">{label}</span>
+      <strong className="mt-1 block font-mono text-2xl text-white print:text-black">{value}</strong>
     </div>
   );
 }
@@ -175,12 +180,12 @@ function Metric({ label, value }: { label: string; value: string }) {
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-xl font-bold">{title}</h2>
+      <h2 className="text-xl font-semibold text-white print:text-black">{title}</h2>
       {children}
     </section>
   );
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-xl border border-dashed border-[#D8CFC5] p-8 text-center text-sm text-[#6E625A]">{text}</div>;
+  return <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-400 print:border-slate-300 print:text-slate-600">{text}</div>;
 }
