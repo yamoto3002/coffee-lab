@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Clock, Flame, Play, RotateCcw, Save, Square, Timer, Trash2, Wind } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Bean, Roast, RoastStep } from '@/types';
+import CoachInsightCard from '@/components/CoachInsightCard';
+import SyncStatus from '@/components/SyncStatus';
+import { getLiveRoastCoachInsight } from '@/lib/coach';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio, DBService, secondsToTime, timeToSeconds } from '@/lib/db';
 import { todayDateString } from '@/lib/date';
 
@@ -345,6 +348,11 @@ function NewRoastContent() {
     return Array.from(map.values()).sort((a, b) => Number(a.secs) - Number(b.secs));
   }, [ghostSteps, timeline]);
 
+  const dropCoachInsight = useMemo(() => {
+    if (!dropTime) return null;
+    return getLiveRoastCoachInsight(buildDraftRoast(), pastRoasts);
+  }, [buildDraftRoast, dropTime, pastRoasts]);
+
   return (
     <div className="lab-shell min-h-screen text-[#F4F4F6]" style={{ backgroundImage: `${PHASE_STYLE[phase]}, radial-gradient(circle at 80% 0%, ${beanAccent}22, transparent 36%)` }}>
       <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-6">
@@ -354,27 +362,19 @@ function NewRoastContent() {
           </Link>
           <div>
             <h1 className="text-lg font-bold md:text-xl">Live Roast</h1>
-            <p className="text-xs text-[#8E8E93]">{roastId} / {syncStatus}</p>
+            <p className="text-xs text-[#8E8E93]">{roastId} / local-first recording</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {DBService.getPendingSyncCount() > 0 && (
-            <button onClick={retryPendingSync} className="tap-button hidden rounded-xl border border-cyan-300/40 px-3 py-2 text-xs font-bold text-cyan-100 md:block">
-              未同期を再送
-            </button>
-          )}
-        <button onClick={saveRoast} disabled={isSaving} className="tap-button flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14] disabled:cursor-not-allowed disabled:opacity-60" style={{ backgroundColor: beanAccent }}>
+          <div className="hidden md:block"><SyncStatus message={syncStatus} tone={syncError ? 'error' : DBService.getPendingSyncCount() > 0 ? 'pending' : 'idle'} onRetry={retryPendingSync} compact /></div>
+          <button onClick={saveRoast} disabled={isSaving} className="tap-button flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14] disabled:cursor-not-allowed disabled:opacity-60" style={{ backgroundColor: beanAccent }}>
           <Save className="h-4 w-4" />
           {isSaving ? '保存中' : '保存'}
         </button>
         </div>
       </header>
 
-      {syncError && (
-        <div className="border-b border-[#7F1D1D] bg-[#450A0A] px-4 py-3 text-sm text-red-100 md:px-6">
-          {syncError}
-        </div>
-      )}
+      {syncError && <div className="border-b border-amber-300/15 bg-amber-300/[0.06] px-4 py-2.5 md:px-6"><SyncStatus message={`${syncError} 入力内容はローカルに残っています。`} tone="error" onRetry={retryPendingSync} /></div>}
 
       <div className="sticky top-[98px] z-10 grid grid-cols-2 border-b border-white/10 bg-[#080E14]/95 backdrop-blur sm:top-[73px]">
         <button onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-b-2 text-cyan-100' : 'text-slate-400'}`} style={{ borderColor: tabMode === 'live' ? beanAccent : undefined }}>
@@ -414,27 +414,21 @@ function NewRoastContent() {
               )}
             </Panel>
 
-            <Panel title="タイマー">
-              <div className="rounded-3xl bg-[#050A11] p-6 text-center shadow-inner neon-ring">
-                <div className="timer-display font-mono text-6xl font-black tracking-normal text-[#F4F4F6] md:text-7xl">{currentTime}</div>
-                <p className="mt-2 text-xs text-[#8E8E93]">START前でも火力・風量を事前設定できます</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={isRunning ? pauseRoast : startRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full py-3 font-bold text-[#080E14]" style={{ backgroundColor: beanAccent }}>
-                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  {isRunning ? 'PAUSE' : 'START'}
-                </button>
-                <button onClick={resetRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full bg-white/[0.06] py-3 font-bold text-[#E4E4E7]">
-                  <RotateCcw className="h-4 w-4" /> RESET
-                </button>
-                <button onClick={saveRoast} className="tap-button flex min-h-14 items-center justify-center gap-2 rounded-full bg-white/[0.06] py-3 font-bold text-[#E4E4E7]">
-                  <Save className="h-4 w-4" /> SAVE
-                </button>
-              </div>
-            </Panel>
           </section>
 
           <section className="space-y-4">
+            <section className="lab-card relative overflow-hidden rounded-3xl p-6 text-center md:p-8" style={{ borderColor: `${beanAccent}40` }}>
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/60 to-transparent" />
+              <div className="flex items-center justify-between text-left"><span className="eyebrow text-slate-500">{hasStarted ? 'Roasting in progress' : 'Ready for charge'}</span><span className="status-pill border-white/10 bg-white/[0.05]" style={{ color: beanAccent }}>{isRunning ? 'LIVE' : hasStarted ? 'PAUSED' : 'SETUP'}</span></div>
+              <div className="timer-display mt-5 font-mono text-7xl font-black tracking-normal text-white sm:text-8xl lg:text-9xl">{currentTime}</div>
+              <p className="mt-3 text-xs text-slate-400">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 大きなマイルストーンをタップ` : '豆・投入量・火力・風量を確認して、実験を始めます。'}</p>
+              <div className="mx-auto mt-7 grid max-w-md grid-cols-[1.45fr_1fr] gap-3">
+                <button onClick={isRunning ? pauseRoast : startRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl py-3 font-bold text-[#080E14] shadow-lg" style={{ backgroundColor: beanAccent }}>
+                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{isRunning ? 'PAUSE' : hasStarted ? 'RESUME' : 'START'}
+                </button>
+                <button onClick={resetRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] py-3 text-sm font-bold text-[#E4E4E7]"><RotateCcw className="h-4 w-4" /> RESET</button>
+              </div>
+            </section>
             <Panel title="火力・風量">
               <NumberControl icon={<Flame className="h-4 w-4" />} label="火力" value={liveHeat} onChange={changeHeat} color="orange" />
               <NumberControl icon={<Wind className="h-4 w-4" />} label="風量" value={liveAir} onChange={changeAir} color="blue" />
@@ -473,6 +467,7 @@ function NewRoastContent() {
               <Stat label="Dev" value={devTime || '不明'} />
               <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
             </div>
+            {dropCoachInsight && <CoachInsightCard insight={{ ...dropCoachInsight, actionHref: undefined, actionLabel: undefined }} featured />}
             {firstCrackTime && !dropTime && (
               <p className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100">
                 1st Crack後のDevは現在時刻ベースでリアルタイム計算中です。

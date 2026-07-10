@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock, FileText, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import CoachInsightCard from '@/components/CoachInsightCard';
+import SyncStatus from '@/components/SyncStatus';
+import { getInsightsForRoast, getLiveRoastCoachInsight } from '@/lib/coach';
 import { DBService, getAgingDays, getRoastBatchBalance, secondsToTime, timeToSeconds } from '@/lib/db';
 import { formatDate } from '@/lib/date';
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
@@ -17,6 +20,9 @@ export default function RoastDetailPage() {
   const [bean, setBean] = useState<Bean | null>(null);
   const [steps, setSteps] = useState<RoastStep[]>([]);
   const [tastings, setTastings] = useState<Tasting[]>([]);
+  const [allBeans, setAllBeans] = useState<Bean[]>([]);
+  const [allRoasts, setAllRoasts] = useState<Roast[]>([]);
+  const [allTastings, setAllTastings] = useState<Tasting[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
 
   const load = useCallback(() => {
@@ -29,6 +35,9 @@ export default function RoastDetailPage() {
     setBean(DBService.getBeanById(currentRoast.beanId) || null);
     setSteps(DBService.getRoastSteps(id));
     setTastings(DBService.getTastingsForRoast(id));
+    setAllBeans(DBService.getBeans());
+    setAllRoasts(DBService.getRoasts());
+    setAllTastings(DBService.getTastings());
   }, [id, router]);
 
   useEffect(() => {
@@ -92,6 +101,8 @@ export default function RoastDetailPage() {
     ? `${roast.developmentTime} / ${roast.developmentRatio}%`
     : '不明';
   const accent = bean?.themeColor || '#00DFFF';
+  const coachInsight = getInsightsForRoast({ beans: allBeans, roasts: allRoasts, tastings: allTastings }, id)[0]
+    || getLiveRoastCoachInsight(roast, allRoasts);
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
@@ -119,7 +130,7 @@ export default function RoastDetailPage() {
         </div>
       </header>
 
-      {syncMessage && <div className="border-b border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100 md:px-6">{syncMessage}</div>}
+      {syncMessage && <div className="border-b border-white/10 bg-white/[0.025] px-4 py-2 md:px-6"><SyncStatus message={syncMessage} tone={syncMessage.includes('失敗') ? 'error' : 'success'} compact /></div>}
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 pb-28 md:p-6">
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -168,6 +179,8 @@ export default function RoastDetailPage() {
             </div>
           </Panel>
         </section>
+
+        <section aria-label="AI Roast Coach"><CoachInsightCard insight={{ ...coachInsight, actionHref: undefined, actionLabel: undefined }} featured /></section>
 
         {(!roast.firstCrackTime || roast.firstCrackStatus === 'not_detected' || roast.firstCrackStatus === 'unknown') && (
           <section className="rounded-xl border border-amber-300/20 bg-amber-400/10 p-4 text-sm text-amber-100">

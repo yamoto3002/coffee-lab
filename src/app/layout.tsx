@@ -4,8 +4,8 @@ import Navigation from "@/components/Navigation";
 
 
 export const metadata: Metadata = {
-  title: "Coffee Lab - 焙煎記録データベース",
-  description: "コーヒーの生豆、焙煎、テイスティングを記録するデータベース",
+  title: "Coffee Lab — Science. Flavor. Evolution.",
+  description: "焙煎、テイスティング、学びをつなぐコーヒーの実験室。",
   icons: {
     icon: "/icon.svg",
     apple: "/icon.svg",
@@ -28,15 +28,7 @@ export default function RootLayout({
       lang="ja"
       className="h-full antialiased dark"
     >
-      <body className="min-h-full bg-[#0B0B0C] text-[#F4F4F6] font-sans overflow-x-hidden">
-        {/* Coffee-themed subtle background overlay */}
-        <div
-          className="fixed inset-0 pointer-events-none z-0"
-          aria-hidden="true"
-          style={{
-            backgroundImage: 'linear-gradient(180deg, rgba(208, 155, 106, 0.03), transparent 34%, rgba(208, 155, 106, 0.02))',
-          }}
-        />
+      <body className="min-h-full text-[#F5F7FA] overflow-x-hidden">
         <div className="flex min-h-screen flex-col md:flex-row relative z-10">
           <Navigation />
           <main className="flex-1 pb-20 md:pb-0 min-h-screen relative overflow-x-hidden">

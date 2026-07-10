@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Minus, Plus, Save, Star, Trash2, X } from 'lucide-react';
+import CoachInsightCard from '@/components/CoachInsightCard';
+import SyncStatus from '@/components/SyncStatus';
+import { getTastingCoachInsight } from '@/lib/coach';
 import { DBService } from '@/lib/db';
 import { diffDateDays, formatDate, todayDateString } from '@/lib/date';
 import { FLAVOR_CATEGORIES, flavorColor } from '@/lib/flavorWheel';
@@ -63,6 +66,7 @@ export default function TastingPage() {
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
+  const [savedTasting, setSavedTasting] = useState<Tasting | null>(null);
   const [activeCategory, setActiveCategory] = useState(FLAVOR_CATEGORIES[0].name);
   const [activeSubcategory, setActiveSubcategory] = useState(FLAVOR_CATEGORIES[0].subcategories[0].name);
 
@@ -179,7 +183,7 @@ export default function TastingPage() {
     DBService.saveTasting(tasting, false);
     setSyncMessage('ローカル保存済み。Google Sheetsはバックグラウンドで同期します。');
     void DBService.saveTastingToCloud(tasting);
-    router.push(`/roasts/${id}`);
+    setSavedTasting(tasting);
   };
 
   const deleteTasting = () => {
@@ -214,16 +218,17 @@ export default function TastingPage() {
               <Trash2 className="h-4 w-4" />
             </button>
           )}
-          <button onClick={saveTasting} className="tap-button inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-[#080E14]" style={{ backgroundColor: tastingColor }}>
-            <Save className="h-4 w-4" />
-            保存
+          <button onClick={saveTasting} className="tap-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14]" style={{ backgroundColor: tastingColor }}>
+            {savedTasting ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            {savedTasting ? '保存済み' : '保存'}
           </button>
         </div>
       </header>
 
-      {syncMessage && <div className="border-b border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100 md:px-6">{syncMessage}</div>}
+      {syncMessage && <div className="border-b border-white/10 bg-white/[0.025] px-4 py-2 md:px-6"><SyncStatus message={syncMessage} tone="pending" compact /></div>}
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:p-6">
+        {savedTasting && <section className="lg:col-span-2"><CoachInsightCard insight={{ ...getTastingCoachInsight(roast, savedTasting), actionHref: undefined, actionLabel: undefined }} featured /><div className="mt-3 flex justify-end"><Link href={`/roasts/${id}`} className="btn-secondary tap-button inline-flex items-center gap-2">焙煎詳細へ戻る<ArrowLeft className="h-4 w-4 rotate-180" /></Link></div></section>}
         <section className="space-y-6">
           <Panel title="基本情報">
             <div className="grid gap-4 md:grid-cols-3">
