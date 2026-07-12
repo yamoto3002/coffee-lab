@@ -30,7 +30,7 @@ export default function CoachInsightCard({ insight, featured = false }: { insigh
           <h2 className={featured ? 'mt-2 text-xl font-semibold tracking-tight text-white md:text-2xl' : 'mt-2 text-base font-semibold leading-snug text-white'}>{insight.title}</h2>
         </div>
       </div>
-      <div className={`mt-4 grid gap-3 ${featured ? 'md:grid-cols-3' : ''}`}>
+      <div className="mt-4 grid gap-2">
         <InsightSection label="Observation" body={observation || '利用できる記録を確認しています。'} />
         <InsightSection label="Interpretation" body={interpretation} />
         <InsightSection label="Next Experiment" body={nextExperiment} accent={insight.color} />
@@ -45,9 +45,9 @@ export default function CoachInsightCard({ insight, featured = false }: { insigh
 
 function InsightSection({ label, body, accent }: { label: string; body: string; accent?: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-black/10 p-3">
+    <div className="grid gap-1 border-l border-white/[0.09] py-1 pl-3 sm:grid-cols-[8.5rem_1fr] sm:items-start sm:gap-3">
       <span className="block text-[9px] font-bold uppercase tracking-[.16em] text-slate-500" style={accent ? { color: accent } : undefined}>{label}</span>
-      <p className="mt-1.5 text-xs leading-5 text-slate-300">{body}</p>
+      <p className="text-xs leading-5 text-slate-300">{body}</p>
     </div>
   );
 }

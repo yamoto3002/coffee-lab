@@ -142,3 +142,15 @@ export function flavorCategoryLabel(flavorLabel: string | undefined): string {
   }
   return '';
 }
+
+export function findFlavorPath(flavorLabel: string | undefined): { category: string; subcategory: string } | null {
+  if (!flavorLabel) return null;
+  for (const category of FLAVOR_CATEGORIES) {
+    for (const subcategory of category.subcategories) {
+      if (subcategory.flavors.some(flavor => flavor.label === flavorLabel || flavor.name === flavorLabel)) {
+        return { category: category.name, subcategory: subcategory.name };
+      }
+    }
+  }
+  return null;
+}

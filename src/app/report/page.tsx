@@ -102,9 +102,9 @@ export default function ReportPage() {
                     <td>{roast.greenWeight}g</td>
                     <td>{roast.roastedWeight}g</td>
                     <td>{roast.lossRatio}%</td>
-                    <td>{roast.firstCrackTime || '-'}</td>
-                    <td>{roast.secondCrackTime || '-'}</td>
-                    <td>{roast.dropTime || '-'}</td>
+                    <td>{roast.firstCrackTime || '不明'}</td>
+                    <td>{roast.secondCrackTime || '不明'}</td>
+                    <td>{roast.dropTime || '不明'}</td>
                     <td>{roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`}</td>
                   </tr>
                 ))}

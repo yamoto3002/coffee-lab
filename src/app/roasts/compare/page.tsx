@@ -119,7 +119,7 @@ function CompareContent() {
                 <div className="mt-4 space-y-2 text-sm">
                   <Row label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
                   <Row label="Loss" value={`${roast.lossRatio}%`} />
-                  <Row label="1st / 2nd / Drop" value={`${roast.firstCrackTime || '不明'} / ${roast.secondCrackTime || '-'} / ${roast.dropTime || '-'}`} />
+                  <Row label="1st / 2nd / Drop" value={`${roast.firstCrackTime || '不明'} / ${roast.secondCrackTime || '不明'} / ${roast.dropTime || '不明'}`} />
                   <Row label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} />
                 </div>
                 {topTasting && (

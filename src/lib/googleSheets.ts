@@ -1,5 +1,5 @@
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
-import { calculateDevRatio, calculateDevTime, calculateLossRatio, normalizeElapsedTime } from '@/lib/db';
+import { calculateDevRatio, calculateDevTime, calculateLossRatio, getMilestoneTimesFromSteps, normalizeElapsedTime } from '@/lib/db';
 import { normalizeDateOnly } from '@/lib/date';
 
 type AppsScriptJson = {
@@ -23,7 +23,9 @@ type SheetsSnapshot = {
 
 type RoastTimelinePayload = {
   steps?: Partial<RoastStep>[];
+  firstCrackTime?: string;
   secondCrackTime?: string;
+  dropTime?: string;
 };
 
 const APPS_SCRIPT_HOST_RE = /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:\?.*)?$/;
@@ -153,9 +155,6 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
   const timeline = parseTimelinePayload(row.timelineJson);
   const greenWeight = toNumber(row.greenWeight, toNumber(row.inputWeight));
   const roastedWeight = toNumber(row.roastedWeight, toNumber(row.expectedOutputWeight));
-  const firstCrackTime = normalizeElapsedTime(row.firstCrackTime) || null;
-  const secondCrackTime = normalizeElapsedTime(row.secondCrackTime) || normalizeElapsedTime(timeline.secondCrackTime) || null;
-  const dropTime = normalizeElapsedTime(row.dropTime);
   const steps = Array.isArray(timeline.steps)
     ? timeline.steps.map((step, index) => ({
         id: toStringValue(step.id) || `step_${roastId}_${index}`,
@@ -166,6 +165,13 @@ function normalizeRoast(row: Record<string, unknown>): { roast: Roast; steps: Ro
         memo: toStringValue(step.memo),
       }))
     : [];
+  const stepMilestones = getMilestoneTimesFromSteps(steps);
+  // Timeline values are the source of truth because they are captured from the
+  // same elapsed timer the user touched during roasting. Sheet columns remain
+  // a compatibility fallback for older records.
+  const firstCrackTime = normalizeElapsedTime(timeline.firstCrackTime) || stepMilestones.firstCrackTime || normalizeElapsedTime(row.firstCrackTime) || null;
+  const secondCrackTime = normalizeElapsedTime(timeline.secondCrackTime) || stepMilestones.secondCrackTime || normalizeElapsedTime(row.secondCrackTime) || null;
+  const dropTime = normalizeElapsedTime(timeline.dropTime) || stepMilestones.dropTime || normalizeElapsedTime(row.dropTime);
 
   return {
     roast: {
@@ -265,7 +271,9 @@ function roastToAppsScriptRow(roast: Roast, steps: RoastStep[]): Record<string, 
   const secondCrackTime = normalizeElapsedTime(roast.secondCrackTime);
   const timelinePayload: RoastTimelinePayload = {
     steps: roastSteps,
+    firstCrackTime: normalizeElapsedTime(roast.firstCrackTime),
     secondCrackTime,
+    dropTime: normalizeElapsedTime(roast.dropTime),
   };
 
   return {

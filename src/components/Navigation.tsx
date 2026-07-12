@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { BarChart2, Coffee, Flame, Home, Plus, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -15,9 +16,7 @@ const navItems = [
 
 export function CoffeeLabIcon({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <div className={clsx('brand-mark relative flex items-center justify-center rounded-xl bg-[#090B0D]', className)} aria-hidden="true">
-      <span className="brand-mark-bean" />
-    </div>
+    <Image src="/icon.svg" width={64} height={64} alt="" className={clsx('rounded-xl', className)} aria-hidden="true" priority />
   );
 }
 
@@ -26,12 +25,12 @@ export default function Navigation() {
 
   return (
     <>
-      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-[#080b14]/88 px-4 py-6 backdrop-blur-xl md:flex">
+      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-[#dca66c]/10 bg-[#0b0908]/92 px-4 py-6 backdrop-blur-xl md:flex">
         <div className="mb-8 flex items-center gap-2.5 px-2">
           <CoffeeLabIcon />
           <div>
             <h1 className="text-lg font-bold tracking-normal text-[#F4F4F6]">Coffee Lab</h1>
-            <p className="text-[10px] uppercase tracking-[0.28em] text-cyan-200/70">Roast Journal</p>
+            <p className="text-[10px] uppercase tracking-[0.28em] text-[#dca66c]/75">Roast Journal</p>
           </div>
         </div>
 
@@ -45,10 +44,10 @@ export default function Navigation() {
                 href={item.href}
                 className={clsx(
                   'tap-button relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium',
-                  isActive ? 'bg-cyan-300/10 text-cyan-200 neon-ring' : 'text-slate-400 hover:bg-white/[0.04] hover:text-[#F4F4F6]'
+                  isActive ? 'bg-[#dca66c]/10 text-[#efc18e] neon-ring' : 'text-slate-400 hover:bg-white/[0.035] hover:text-[#F4F0EA]'
                 )}
               >
-                {isActive && <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-cyan-300" />}
+                {isActive && <span className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-[#dca66c]" />}
                 <Icon className="h-4 w-4 shrink-0" />
                 {item.label}
               </Link>
@@ -58,7 +57,7 @@ export default function Navigation() {
 
         <div className="border-t border-white/10 pt-4">
           <p className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">New experiment</p>
-          <Link href="/roasts/new" className="tap-button flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-[#FF8A3D] px-4 py-3 text-sm font-bold text-[#080E14] shadow-lg shadow-cyan-500/15">
+          <Link href="/roasts/new" className="tap-button flex w-full items-center justify-center gap-2 rounded-full bg-[#dca66c] px-4 py-3 text-sm font-bold text-[#160f09] shadow-lg shadow-black/20">
             <Plus className="h-4 w-4" />
             新規焙煎
           </Link>

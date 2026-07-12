@@ -151,11 +151,11 @@ export default function RoastsPage() {
                       </div>
                       <h2 className="break-words font-bold text-[#F4F4F6]">{bean ? `[${bean.country}] ${bean.name}` : 'Unknown Bean'}</h2>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-300 sm:grid-cols-4">
-                      <Mini label="投入" value={`${roast.greenWeight}g`} />
-                      <Mini label="焙煎後" value={`${roast.roastedWeight}g`} />
-                      <Mini label="Loss" value={`${roast.lossRatio}%`} />
-                      <Mini label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} accent />
+                    <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-300 sm:grid-cols-4">
+                      <Mini label="1st" value={roast.firstCrackTime || '不明'} accent />
+                      <Mini label="2nd" value={roast.secondCrackTime || '不明'} />
+                      <Mini label="Drop" value={roast.dropTime || '不明'} accent />
+                      <div className="hidden sm:block"><Mini label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} /></div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-white/10 p-4 sm:flex-col sm:items-start sm:justify-center sm:border-l sm:border-t-0">

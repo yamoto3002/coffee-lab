@@ -382,10 +382,15 @@ function normalizeBean(input) {
 
 function normalizeRoast(input) {
   const now = new Date().toISOString();
-  const firstCrackTime = normalizeElapsedTime(input.firstCrackTime);
-  const secondCrackTime = normalizeElapsedTime(firstDefined(input.secondCrackTime, readSecondCrackFromTimeline(input.timelineJson)));
-  const dropTime = normalizeElapsedTime(input.dropTime);
-  const timelineJson = normalizeTimelineJson(input.timelineJson, secondCrackTime);
+  const timelineMilestones = readMilestonesFromTimeline(input.timelineJson);
+  const firstCrackTime = normalizeElapsedTime(firstDefined(timelineMilestones.firstCrackTime, input.firstCrackTime));
+  const secondCrackTime = normalizeElapsedTime(firstDefined(timelineMilestones.secondCrackTime, input.secondCrackTime));
+  const dropTime = normalizeElapsedTime(firstDefined(timelineMilestones.dropTime, input.dropTime));
+  const timelineJson = normalizeTimelineJson(input.timelineJson, {
+    firstCrackTime: firstCrackTime,
+    secondCrackTime: secondCrackTime,
+    dropTime: dropTime,
+  });
   return {
     id: String(input.id || ''),
     roastDate: normalizeDateOnly(input.roastDate),
@@ -443,7 +448,7 @@ function normalizeTasting(input) {
   };
 }
 
-function normalizeTimelineJson(raw, secondCrackTime) {
+function normalizeTimelineJson(raw, milestones) {
   let parsed = {};
   try {
     parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
@@ -463,18 +468,33 @@ function normalizeTimelineJson(raw, secondCrackTime) {
   }) : [];
   return JSON.stringify({
     steps: steps,
-    secondCrackTime: normalizeElapsedTime(secondCrackTime || parsed.secondCrackTime),
+    firstCrackTime: normalizeElapsedTime(milestones.firstCrackTime || parsed.firstCrackTime),
+    secondCrackTime: normalizeElapsedTime(milestones.secondCrackTime || parsed.secondCrackTime),
+    dropTime: normalizeElapsedTime(milestones.dropTime || parsed.dropTime),
   });
 }
 
-function readSecondCrackFromTimeline(raw) {
+function readMilestonesFromTimeline(raw) {
+  const result = { firstCrackTime: '', secondCrackTime: '', dropTime: '' };
   try {
     const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
-    if (parsed && !Array.isArray(parsed)) return parsed.secondCrackTime || '';
+    const payload = Array.isArray(parsed) ? { steps: parsed } : (parsed || {});
+    result.firstCrackTime = normalizeElapsedTime(payload.firstCrackTime);
+    result.secondCrackTime = normalizeElapsedTime(payload.secondCrackTime);
+    result.dropTime = normalizeElapsedTime(payload.dropTime);
+    const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    steps.forEach(function(step) {
+      const time = normalizeElapsedTime(step.time);
+      const memo = String(step.memo || '').trim().toLowerCase();
+      if (!time) return;
+      if (!result.firstCrackTime && /^(1st crack|first crack)(\b|\s|\/)/i.test(memo)) result.firstCrackTime = time;
+      if (!result.secondCrackTime && /^(2nd crack|second crack)(\b|\s|\/)/i.test(memo)) result.secondCrackTime = time;
+      if (!result.dropTime && /^(drop)(\b|\s|\/)/i.test(memo)) result.dropTime = time;
+    });
   } catch (error) {
-    return '';
+    return result;
   }
-  return '';
+  return result;
 }
 
 function normalizeDateOnly(value) {
@@ -506,10 +526,13 @@ function normalizeElapsedTime(value) {
     return seconds <= 21600 ? secondsToTime(seconds) : '';
   }
 
-  if (/^(1899|1900)-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw)) {
-    const parsed = new Date(raw);
-    if (!isNaN(parsed.getTime())) return formatDateAsElapsedTime(parsed);
-    return '';
+  const legacyDate = raw.match(/^(1899|1900)-\d{2}-\d{2}[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (legacyDate) {
+    const hours = Number(legacyDate[2]);
+    const minutes = Number(legacyDate[3]);
+    const seconds = Number(legacyDate[4] || 0);
+    const total = hours * 3600 + minutes * 60 + seconds;
+    return minutes < 60 && seconds < 60 && total <= 21600 ? secondsToTime(total) : '';
   }
 
   const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
