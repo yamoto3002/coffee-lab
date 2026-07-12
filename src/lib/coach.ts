@@ -11,6 +11,9 @@ export type CoachInsight = {
   priority: CoachPriority;
   title: string;
   message: string;
+  observation?: string;
+  interpretation?: string;
+  nextExperiment?: string;
   reason?: string;
   actionLabel?: string;
   actionHref?: string;
@@ -232,6 +235,9 @@ export function getLiveRoastCoachInsight(draft: Roast, previousRoasts: Roast[]):
       title: 'Experiment Complete',
       message: '1st Crackは不明として保存されます。次回は音に加えて香り・煙・色の変化を短く残すと、比較の手がかりになります。',
       reason: '今回の1st Crack時刻が未記録のため、Dev%は計算していません。', relatedRoastId: draft.id,
+      observation: '今回の1st Crack時刻は未記録です。Dev%は計算していません。',
+      interpretation: 'この記録だけでは開発時間の長短を判断できません。焙煎自体の良し悪しを断定する材料も不足しています。',
+      nextExperiment: '次回は音に加えて、香り・煙・豆表面の変化を1st Crack候補としてメモしてください。',
     };
   }
 
@@ -244,6 +250,9 @@ export function getLiveRoastCoachInsight(draft: Roast, previousRoasts: Roast[]):
       title: 'Experiment Complete',
       message: `1st CrackからDropまで ${draft.developmentTime}。${previous.id} と比べてDev%は${direction}です。テイスティングで甘さや後味を並べると違いを確かめられます。`,
       reason: `今回 ${formatNumber(draft.developmentRatio)}%／${previous.id} ${formatNumber(previous.developmentRatio)}%。`, relatedRoastId: draft.id,
+      observation: `Dev%は今回 ${formatNumber(draft.developmentRatio)}%、直近の同じ豆 ${previous.id} は ${formatNumber(previous.developmentRatio)}%でした。`,
+      interpretation: `開発区間は前回より${direction}です。ただし、味への影響はテイスティング前には断定できません。`,
+      nextExperiment: 'Day7前後に甘さ・重さ・後味を同じ条件で評価し、前回との差を残してください。',
     };
   }
 
@@ -252,6 +261,9 @@ export function getLiveRoastCoachInsight(draft: Roast, previousRoasts: Roast[]):
     title: 'Experiment Complete',
     message: `1st CrackからDropまで ${draft.developmentTime} を記録しました。Day7前後に味を残すと、このプロファイルを次の基準にできます。`,
     reason: `Dev% ${formatNumber(draft.developmentRatio)}%／Loss ${formatNumber(draft.lossRatio)}%。`, relatedRoastId: draft.id,
+    observation: `Dev% ${formatNumber(draft.developmentRatio)}%、Loss ${formatNumber(draft.lossRatio)}%を記録しました。`,
+    interpretation: '同じ豆の比較記録がまだ少ないため、現時点ではこの数値を基準候補として扱います。',
+    nextExperiment: 'Day7前後にテイスティングし、甘さ・酸の明るさ・後味を記録してください。',
   };
 }
 
@@ -262,6 +274,9 @@ export function getTastingCoachInsight(roast: Roast, tasting: Tasting): CoachIns
       title: 'Tasting logged',
       message: 'スコアを保存しました。次回、フレーバーを一つでも選ぶと、味の変化を言葉でも比較しやすくなります。',
       reason: `Day ${tasting.dayAfterRoast}／${formatNumber(tasting.score)}点。フレーバーは未選択です。`, relatedRoastId: roast.id,
+      observation: `Day ${tasting.dayAfterRoast}、${formatNumber(tasting.score)}点として保存しました。フレーバーは未選択です。`,
+      interpretation: '点数は比較できますが、味がどう変化したかを説明する材料はまだ不足しています。',
+      nextExperiment: '次回は最も強く感じたフレーバーを一つだけでも選び、後味と一緒に残してください。',
     };
   }
   if (tasting.negatives.length > 0) {
@@ -270,6 +285,9 @@ export function getTastingCoachInsight(roast: Roast, tasting: Tasting): CoachIns
       title: 'Tasting logged',
       message: `「${tasting.negatives.slice(0, 2).join(' / ')}」をメモしました。次回は焙煎条件を一つだけ変えて、同じ観点で比べると実験になります。`,
       reason: `Day ${tasting.dayAfterRoast}／${formatNumber(tasting.score)}点／フレーバー ${tasting.flavors.slice(0, 3).join('、')}。`, relatedRoastId: roast.id,
+      observation: `Day ${tasting.dayAfterRoast}、${formatNumber(tasting.score)}点。「${tasting.negatives.slice(0, 2).join(' / ')}」が記録されています。`,
+      interpretation: 'ネガティブ要素の原因はこの1件だけでは断定できませんが、次の比較観点として使えます。',
+      nextExperiment: '次回は焙煎条件を一つだけ変え、同じ抽出条件・同じ観点で再評価してください。',
     };
   }
   return {
@@ -277,6 +295,9 @@ export function getTastingCoachInsight(roast: Roast, tasting: Tasting): CoachIns
     title: 'Tasting logged',
     message: `Day ${tasting.dayAfterRoast} の印象を保存しました。次のテイスティングでも同じフレーバーや後味を見ていくと、エイジングの変化を追えます。`,
     reason: `${formatNumber(tasting.score)}点／フレーバー ${tasting.flavors.slice(0, 3).join('、')}。`, relatedRoastId: roast.id,
+    observation: `Day ${tasting.dayAfterRoast}、${formatNumber(tasting.score)}点。主な印象は ${tasting.flavors.slice(0, 3).join('、')} です。`,
+    interpretation: 'この記録が同じバッチの味の基準になります。次回と並べることでエイジングの変化を確認できます。',
+    nextExperiment: '次回も同じ抽出条件で、今回のフレーバーと後味が強まるか弱まるかを確認してください。',
   };
 }
 

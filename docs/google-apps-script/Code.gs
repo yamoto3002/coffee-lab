@@ -493,16 +493,23 @@ function normalizeDateOnly(value) {
 
 function normalizeElapsedTime(value) {
   if (value === null || value === undefined || value === '') return '';
-  if (typeof value === 'number' && isFinite(value)) return secondsToTime(value);
+  if (typeof value === 'number' && isFinite(value)) {
+    const seconds = value > 0 && value < 1 ? Math.round(value * 86400) : value;
+    return seconds >= 0 && seconds <= 21600 ? secondsToTime(seconds) : '';
+  }
   if (value instanceof Date) return formatDateAsElapsedTime(value);
 
   const raw = String(value).trim();
   if (!raw) return '';
-  if (/^\d+$/.test(raw)) return secondsToTime(Number(raw));
+  if (/^\d+$/.test(raw)) {
+    const seconds = Number(raw);
+    return seconds <= 21600 ? secondsToTime(seconds) : '';
+  }
 
-  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw) || /Z$/.test(raw)) {
+  if (/^(1899|1900)-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw)) {
     const parsed = new Date(raw);
     if (!isNaN(parsed.getTime())) return formatDateAsElapsedTime(parsed);
+    return '';
   }
 
   const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
@@ -510,14 +517,18 @@ function normalizeElapsedTime(value) {
     const first = Number(hms[1]);
     const second = Number(hms[2]);
     const third = Number(hms[3]);
-    if (first === 0) return secondsToTime(second * 60 + third);
-    return pad2(first) + ':' + pad2(second);
+    const seconds = first * 3600 + second * 60 + third;
+    return second < 60 && third < 60 && seconds <= 21600 ? secondsToTime(seconds) : '';
   }
 
   const ms = raw.match(/^(\d{1,3}):(\d{1,2})$/);
-  if (ms) return pad2(ms[1]) + ':' + pad2(Math.min(59, Number(ms[2])));
+  if (ms) {
+    const mins = Number(ms[1]);
+    const secs = Number(ms[2]);
+    return mins <= 360 && secs < 60 ? secondsToTime(mins * 60 + secs) : '';
+  }
 
-  return raw;
+  return '';
 }
 
 function formatDateOnly(date) {

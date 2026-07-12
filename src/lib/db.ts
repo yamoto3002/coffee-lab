@@ -18,18 +18,35 @@ export function secondsToTime(secs: number): string {
 
 export function normalizeElapsedTime(value: unknown): string {
   if (value === null || value === undefined || value === '') return '';
-  if (typeof value === 'number' && Number.isFinite(value)) return secondsToTime(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // Sheets can expose a time-only cell as a fraction of one day. Plain
+    // numbers written by Coffee Lab are elapsed seconds.
+    const seconds = value > 0 && value < 1 ? Math.round(value * 86400) : value;
+    return seconds >= 0 && seconds <= 21600 ? secondsToTime(seconds) : '';
+  }
 
   const raw = String(value).trim();
   if (!raw) return '';
 
-  if (/^\d+$/.test(raw)) return secondsToTime(Number(raw));
+  if (/^\d+$/.test(raw)) {
+    const seconds = Number(raw);
+    return seconds <= 21600 ? secondsToTime(seconds) : '';
+  }
 
-  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw) || /\bGMT\b|\bUTC\b|Z$/i.test(raw)) {
+  // Historic Google Sheets time cells may have been serialized against the
+  // Excel epoch. Recover only that known legacy shape. A normal ISO timestamp
+  // is a clock time and must never leak into an elapsed-time field.
+  if (/^(?:1899|1900)-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw)) {
     const parsed = new Date(raw);
     if (!Number.isNaN(parsed.getTime())) {
-      return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+      }).formatToParts(parsed);
+      const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(item => item.type === type)?.value || 0);
+      const seconds = part('hour') * 3600 + part('minute') * 60 + part('second');
+      return seconds <= 21600 ? secondsToTime(seconds) : '';
     }
+    return '';
   }
 
   const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
@@ -38,8 +55,8 @@ export function normalizeElapsedTime(value: unknown): string {
     const second = Number(hms[2]);
     const third = Number(hms[3]);
     if ([first, second, third].every(Number.isFinite)) {
-      if (first === 0) return secondsToTime(second * 60 + third);
-      return `${String(first).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+      const seconds = first * 3600 + second * 60 + third;
+      return second < 60 && third < 60 && seconds <= 21600 ? secondsToTime(seconds) : '';
     }
   }
 
@@ -47,12 +64,12 @@ export function normalizeElapsedTime(value: unknown): string {
   if (ms) {
     const mins = Number(ms[1]);
     const secs = Number(ms[2]);
-    if (Number.isFinite(mins) && Number.isFinite(secs)) {
-      return `${String(mins).padStart(2, '0')}:${String(Math.max(0, Math.min(59, secs))).padStart(2, '0')}`;
+    if (Number.isFinite(mins) && Number.isFinite(secs) && secs < 60 && mins <= 360) {
+      return secondsToTime(mins * 60 + secs);
     }
   }
 
-  return raw;
+  return '';
 }
 
 export function calculateDevTime(firstCrack: string | null | undefined, drop: string | null | undefined): string | null {

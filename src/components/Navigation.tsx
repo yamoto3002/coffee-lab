@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart2, Coffee, FlaskConical, Flame, Home, Plus, Settings } from 'lucide-react';
+import { BarChart2, Coffee, Flame, Home, Plus, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const navItems = [
@@ -15,10 +15,8 @@ const navItems = [
 
 export function CoffeeLabIcon({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <div className={clsx('relative flex items-center justify-center rounded-xl bg-[#090F18] ring-1 ring-cyan-300/30 neon-ring', className)} aria-hidden="true">
-      <FlaskConical className="h-5 w-5 text-cyan-200" />
-      <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-[#FB3D71] shadow-[0_0_18px_rgba(251,61,113,0.75)]" />
-      <span className="absolute -bottom-1 left-2 h-2 w-2 rounded-full bg-[#FF8A3D] shadow-[0_0_14px_rgba(255,138,61,0.75)]" />
+    <div className={clsx('brand-mark relative flex items-center justify-center rounded-xl bg-[#090B0D]', className)} aria-hidden="true">
+      <span className="brand-mark-bean" />
     </div>
   );
 }

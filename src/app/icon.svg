@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Coffee Lab">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="15" fill="#090B0D"/>
   <circle cx="32" cy="32" r="19" fill="none" stroke="#2A3135" stroke-width="7"/>
   <path d="M45.4 18.6A19 19 0 0 0 22 15.9" fill="none" stroke="#65DCE8" stroke-width="7" stroke-linecap="round"/>

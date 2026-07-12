@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Minus, Plus, Save, Star, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Minus, Plus, Save, Star, Trash2 } from 'lucide-react';
 import CoachInsightCard from '@/components/CoachInsightCard';
+import FlavorWheel from '@/components/FlavorWheel';
 import SyncStatus from '@/components/SyncStatus';
 import { getTastingCoachInsight } from '@/lib/coach';
 import { DBService } from '@/lib/db';
@@ -116,8 +117,6 @@ export default function TastingPage() {
     return () => window.clearTimeout(timer);
   }, [id, isNew, requestedDay, router]);
 
-  const activeCategoryData = FLAVOR_CATEGORIES.find(category => category.name === activeCategory) || FLAVOR_CATEGORIES[0];
-  const activeSubcategoryData = activeCategoryData.subcategories.find(subcategory => subcategory.name === activeSubcategory) || activeCategoryData.subcategories[0];
   const tastingColor = flavorColor(flavors[0], '#00DFFF');
 
   const dayAfterRoast = roast ? Math.max(0, diffDateDays(roast.roastDate, tastingDate)) : 0;
@@ -268,56 +267,18 @@ export default function TastingPage() {
           </Panel>
 
           <Panel title="フレーバー">
-            <div className="flex flex-wrap gap-2">
-              {FLAVOR_CATEGORIES.map(category => (
-                <button
-                  key={category.name}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(category.name);
-                    setActiveSubcategory(category.subcategories[0].name);
-                  }}
-                  className={`tap-button rounded-full border px-3 py-1.5 text-xs font-semibold ${activeCategory === category.name ? 'text-[#080E14]' : 'text-slate-300'}`}
-                  style={{ borderColor: `${category.color}55`, backgroundColor: activeCategory === category.name ? category.color : `${category.color}14` }}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 no-scrollbar flex gap-2 overflow-x-auto pb-1">
-              {activeCategoryData.subcategories.map(subcategory => (
-                <button
-                  key={subcategory.name}
-                  type="button"
-                  onClick={() => setActiveSubcategory(subcategory.name)}
-                  className={`tap-button shrink-0 rounded-xl border px-3 py-2 text-xs ${activeSubcategory === subcategory.name ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}
-                >
-                  {subcategory.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {activeSubcategoryData.flavors.map(flavor => (
-                <button
-                  key={flavor.name}
-                  type="button"
-                  onClick={() => toggleFlavor(flavor.label)}
-                  className={`tap-button min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold ${flavors.includes(flavor.label) ? 'text-[#080E14]' : 'text-slate-200'}`}
-                  style={{ borderColor: `${activeCategoryData.color}55`, backgroundColor: flavors.includes(flavor.label) ? activeCategoryData.color : `${activeCategoryData.color}12` }}
-                >
-                  {flavor.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {flavors.map(label => (
-                <button key={label} type="button" onClick={() => removeFlavor(label)} className="tap-button inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: `${flavorColor(label)}66`, backgroundColor: `${flavorColor(label)}18`, color: flavorColor(label) }}>
-                  {label}
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-              {flavors.length === 0 && <span className="text-xs text-slate-500">5〜6個まで選べます。</span>}
-            </div>
+            <FlavorWheel
+              activeCategory={activeCategory}
+              activeSubcategory={activeSubcategory}
+              selected={flavors}
+              onCategoryChange={(category, firstSubcategory) => {
+                setActiveCategory(category);
+                setActiveSubcategory(firstSubcategory);
+              }}
+              onSubcategoryChange={setActiveSubcategory}
+              onToggle={toggleFlavor}
+              onRemove={removeFlavor}
+            />
           </Panel>
 
           <Panel title="ネガティブ要素">
