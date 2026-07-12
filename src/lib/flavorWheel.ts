@@ -55,12 +55,21 @@ export const FLAVOR_CATEGORIES: FlavorCategory[] = [
     ],
   },
   {
-    name: 'cacao-nut',
-    label: 'Cacao / Nut',
-    color: '#B7794B',
+    name: 'chocolate',
+    label: 'Chocolate',
+    color: '#A96F4B',
     subcategories: [
       { name: 'cacao', label: 'Cacao', flavors: [{ name: 'chocolate', label: 'Chocolate' }, { name: 'dark-chocolate', label: 'Dark Chocolate' }, { name: 'cocoa', label: 'Cocoa' }] },
-      { name: 'nut', label: 'Nut', flavors: [{ name: 'almond', label: 'Almond' }, { name: 'hazelnut', label: 'Hazelnut' }, { name: 'peanut', label: 'Peanut' }] },
+      { name: 'milk-chocolate', label: 'Soft', flavors: [{ name: 'milk-chocolate-note', label: 'Milk Chocolate' }, { name: 'cacao-nib', label: 'Cacao Nib' }, { name: 'fudge', label: 'Fudge' }] },
+    ],
+  },
+  {
+    name: 'nutty',
+    label: 'Nutty',
+    color: '#D29A54',
+    subcategories: [
+      { name: 'tree-nut', label: 'Tree Nut', flavors: [{ name: 'almond', label: 'Almond' }, { name: 'hazelnut', label: 'Hazelnut' }, { name: 'walnut', label: 'Walnut' }] },
+      { name: 'roasted-nut-group', label: 'Roasted', flavors: [{ name: 'peanut', label: 'Peanut' }, { name: 'praline', label: 'Praline' }, { name: 'marzipan', label: 'Marzipan' }] },
     ],
   },
   {
@@ -83,11 +92,29 @@ export const FLAVOR_CATEGORIES: FlavorCategory[] = [
   },
   {
     name: 'roast',
-    label: 'Roast',
-    color: '#8B5CF6',
+    label: 'Roasted',
+    color: '#8F6B55',
     subcategories: [
       { name: 'brown', label: 'Brown', flavors: [{ name: 'toast', label: 'Toast' }, { name: 'biscuit', label: 'Biscuit' }, { name: 'malt', label: 'Malt' }] },
       { name: 'deep', label: 'Deep', flavors: [{ name: 'smoky', label: 'Smoky' }, { name: 'roasted-nut', label: 'Roasted Nut' }, { name: 'molten-cocoa', label: 'Molten Cocoa' }] },
+    ],
+  },
+  {
+    name: 'fermented',
+    label: 'Fermented',
+    color: '#B04A78',
+    subcategories: [
+      { name: 'winey', label: 'Winey', flavors: [{ name: 'red-wine', label: 'Red Wine' }, { name: 'rum', label: 'Rum' }, { name: 'brandy', label: 'Brandy' }] },
+      { name: 'cultured', label: 'Cultured', flavors: [{ name: 'yogurt', label: 'Yogurt' }, { name: 'kombucha', label: 'Kombucha' }, { name: 'ripe-fruit', label: 'Ripe Fruit' }] },
+    ],
+  },
+  {
+    name: 'other',
+    label: 'Other',
+    color: '#6FB9C7',
+    subcategories: [
+      { name: 'mineral', label: 'Mineral', flavors: [{ name: 'saline', label: 'Saline' }, { name: 'mineral-note', label: 'Mineral' }, { name: 'earthy', label: 'Earthy' }] },
+      { name: 'texture', label: 'Texture', flavors: [{ name: 'tea-like', label: 'Tea-like' }, { name: 'syrupy', label: 'Syrupy' }, { name: 'silky', label: 'Silky' }] },
     ],
   },
 ];

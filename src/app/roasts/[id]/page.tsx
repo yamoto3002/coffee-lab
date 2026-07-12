@@ -142,7 +142,7 @@ export default function RoastDetailPage() {
                   <span>国: <strong className="text-[#F4F4F6]">{bean.country}</strong></span>
                   <span>精製: <strong className="text-[#F4F4F6]">{bean.process}</strong></span>
                   <span>品種: <strong className="text-[#F4F4F6]">{bean.variety || '-'}</strong></span>
-                  <span>購入量: <strong className="text-[#F4F4F6]">{bean.initialWeight}g</strong></span>
+                  <span>地域: <strong className="text-[#F4F4F6]">{bean.region || '-'}</strong></span>
                 </div>
               </div>
             ) : <p className="text-sm text-red-300">生豆データが見つかりません。</p>}
@@ -153,7 +153,6 @@ export default function RoastDetailPage() {
               <span className="text-xs text-slate-500">編集可能</span>
               <input type="date" value={roast.roastDate} onChange={event => updateRoastDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
             </label>
-            <p className="mt-2 text-xs text-slate-400">{formatDate(roast.roastDate)}</p>
           </Panel>
 
           <Panel title="重量">

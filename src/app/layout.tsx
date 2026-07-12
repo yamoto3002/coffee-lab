@@ -4,11 +4,13 @@ import Navigation from "@/components/Navigation";
 
 
 export const metadata: Metadata = {
-  title: "Coffee Lab — Science. Flavor. Evolution.",
-  description: "焙煎、テイスティング、学びをつなぐコーヒーの実験室。",
+  applicationName: "Coffee Lab",
+  title: "Coffee Lab — Refined Roast OS",
+  description: "焙煎、テイスティング、次の実験をつなぐコーヒーラボ。",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
-    apple: "/icon.svg",
+    shortcut: "/icon.svg",
   },
 };
 

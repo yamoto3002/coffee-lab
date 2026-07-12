@@ -13,6 +13,9 @@ const icons = {
 
 export default function CoachInsightCard({ insight, featured = false }: { insight: CoachInsight; featured?: boolean }) {
   const Icon = icons[insight.type];
+  const observation = insight.observation || insight.reason;
+  const interpretation = insight.interpretation || insight.message;
+  const nextExperiment = insight.nextExperiment || (insight.actionLabel ? `${insight.actionLabel}から、次の比較材料を増やしましょう。` : '次回も同じ観点を記録し、比較できる材料を増やしましょう。');
   const body = (
     <>
       <div className="flex items-start gap-3">
@@ -27,12 +30,24 @@ export default function CoachInsightCard({ insight, featured = false }: { insigh
           <h2 className={featured ? 'mt-2 text-xl font-semibold tracking-tight text-white md:text-2xl' : 'mt-2 text-base font-semibold leading-snug text-white'}>{insight.title}</h2>
         </div>
       </div>
-      <p className={featured ? 'mt-4 max-w-2xl text-sm leading-6 text-slate-300 md:text-base' : 'mt-3 text-sm leading-6 text-slate-300'}>{insight.message}</p>
-      {insight.reason && <p className="mt-3 border-l border-white/10 pl-3 text-xs leading-5 text-slate-500">根拠：{insight.reason}</p>}
+      <div className={`mt-4 grid gap-3 ${featured ? 'md:grid-cols-3' : ''}`}>
+        <InsightSection label="Observation" body={observation || '利用できる記録を確認しています。'} />
+        <InsightSection label="Interpretation" body={interpretation} />
+        <InsightSection label="Next Experiment" body={nextExperiment} accent={insight.color} />
+      </div>
       {insight.actionLabel && <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: insight.color }}>{insight.actionLabel}<ArrowUpRight className="h-4 w-4" /></span>}
     </>
   );
 
   const className = `coach-card ${featured ? 'coach-card-featured' : ''}`;
   return insight.actionHref ? <Link href={insight.actionHref} className={`${className} tap-button`}>{body}</Link> : <article className={className}>{body}</article>;
+}
+
+function InsightSection({ label, body, accent }: { label: string; body: string; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-black/10 p-3">
+      <span className="block text-[9px] font-bold uppercase tracking-[.16em] text-slate-500" style={accent ? { color: accent } : undefined}>{label}</span>
+      <p className="mt-1.5 text-xs leading-5 text-slate-300">{body}</p>
+    </div>
+  );
 }
