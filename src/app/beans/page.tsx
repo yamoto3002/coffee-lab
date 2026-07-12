@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Edit2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
-import { DBService, getAgingDays, getYearsSince } from '@/lib/db';
+import { DBService } from '@/lib/db';
 import { formatDate, todayDateString } from '@/lib/date';
 import { Bean, Roast } from '@/types';
 
@@ -270,7 +270,7 @@ export default function BeansPage() {
       <header className="flex flex-col gap-4 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur md:flex-row md:items-center md:justify-between md:px-6">
         <div>
           <h1 className="text-xl font-bold tracking-wide">生豆管理</h1>
-          <p className="text-xs text-slate-400">購入日、購入量、テーマカラーをGoogle Sheetsと同期</p>
+          <p className="text-xs text-slate-400">生豆と残量をシンプルに記録</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SyncPill status={syncStatus} message={syncMessage} pendingCount={pendingCount} />
@@ -314,7 +314,7 @@ export default function BeansPage() {
                       <h2 className="mt-1 truncate text-sm font-semibold text-[#F4F4F6]">{bean.name}</h2>
                       <p className="mt-1 truncate text-xs text-slate-500">{bean.process || '-'} / {bean.region || '-'}</p>
                     </div>
-                    <span className="shrink-0 rounded-md px-2 py-1 font-mono text-xs font-bold" style={{ backgroundColor: `${color}22`, color }}>{bean.initialWeight}g</span>
+                    <span className="shrink-0 rounded-md px-2 py-1 font-mono text-xs font-bold" style={{ backgroundColor: `${color}18`, color }}>{bean.currentWeight}g</span>
                   </div>
                 </button>
               );
@@ -383,8 +383,6 @@ export default function BeansPage() {
 }
 
 function BeanDetail({ bean, roasts, onEdit, onDelete }: { bean: Bean; roasts: Roast[]; onEdit: () => void; onDelete: () => void }) {
-  const purchaseAge = getAgingDays(bean.purchaseDate);
-  const cropAge = getYearsSince(bean.cropYear);
   const color = bean.themeColor || '#00DFFF';
 
   return (
@@ -408,22 +406,22 @@ function BeanDetail({ bean, roasts, onEdit, onDelete }: { bean: Bean; roasts: Ro
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="購入量" value={`${bean.initialWeight}g`} color={color} />
-        <Metric label="想定Loss" value={`${bean.weightLossPercentage}%`} color="#FF8A3D" />
-        <Metric label="購入から" value={bean.purchaseDate ? `${Math.max(0, purchaseAge)}日` : '-'} color="#00DFFF" />
-        <Metric label="クロップ" value={bean.cropYear ? `Crop ${bean.cropYear}${cropAge !== null ? ` / 約${cropAge}年` : ''}` : '-'} color="#8B5CF6" />
+      <div className="grid grid-cols-2 gap-3">
+        <Metric label="残量" value={`${bean.currentWeight}g`} color={color} />
+        <Metric label="焙煎" value={`${roasts.length} batch`} color="#DCA66C" />
       </div>
 
-      <div className="lab-card-soft grid gap-3 rounded-xl p-4 text-sm md:grid-cols-3">
-        <Info label="精製" value={bean.process || '-'} />
-        <Info label="品種" value={bean.variety || '-'} />
-        <Info label="標高" value={bean.altitude ? `${bean.altitude}m` : '-'} />
-        <Info label="購入日" value={formatDate(bean.purchaseDate)} />
-        <Info label="購入店" value={bean.purchaseShop || '-'} />
-        <Info label="購入価格" value={bean.purchasePrice ? `¥${bean.purchasePrice.toLocaleString()}` : '-'} />
-        <Info label="生産者" value={bean.producer || '-'} />
-      </div>
+      <details className="lab-card-soft rounded-xl p-4 text-sm">
+        <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-500">生豆の詳細</summary>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <Info label="精製" value={bean.process || '-'} />
+          <Info label="品種" value={bean.variety || '-'} />
+          <Info label="標高" value={bean.altitude ? `${bean.altitude}m` : '-'} />
+          <Info label="購入日" value={formatDate(bean.purchaseDate)} />
+          <Info label="購入店" value={bean.purchaseShop || '-'} />
+          <Info label="生産者" value={bean.producer || '-'} />
+        </div>
+      </details>
 
       {bean.notes && (
         <div className="lab-card-soft rounded-xl p-4">

@@ -10,7 +10,7 @@ import SyncStatus from '@/components/SyncStatus';
 import { getTastingCoachInsight } from '@/lib/coach';
 import { DBService } from '@/lib/db';
 import { diffDateDays, formatDate, todayDateString } from '@/lib/date';
-import { FLAVOR_CATEGORIES, flavorColor } from '@/lib/flavorWheel';
+import { FLAVOR_CATEGORIES, findFlavorPath, flavorColor } from '@/lib/flavorWheel';
 import { Bean, Roast, Tasting } from '@/types';
 
 const NEGATIVE_OPTIONS = ['Under Developed', 'Over Developed', 'Astringency', 'Smoky', 'Baked', 'Dry', 'Woody', 'Vegetal', 'Harsh', 'Sour'];
@@ -108,6 +108,11 @@ export default function TastingPage() {
         });
         setRating(existing.recommendationRating);
         setFlavors(existing.flavors || []);
+        const firstFlavorPath = findFlavorPath(existing.flavors?.[0]);
+        if (firstFlavorPath) {
+          setActiveCategory(firstFlavorPath.category);
+          setActiveSubcategory(firstFlavorPath.subcategory);
+        }
         setNegatives(existing.negatives || []);
         setImprovements(existing.improvements || '');
         setNotes(existing.notes || '');
@@ -183,6 +188,7 @@ export default function TastingPage() {
     setSyncMessage('ローカル保存済み。Google Sheetsはバックグラウンドで同期します。');
     void DBService.saveTastingToCloud(tasting);
     setSavedTasting(tasting);
+    router.replace(`/roasts/${id}/tasting/${dayAfterRoast}`);
   };
 
   const deleteTasting = () => {
@@ -228,7 +234,7 @@ export default function TastingPage() {
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:p-6">
         {savedTasting && <section className="lg:col-span-2"><CoachInsightCard insight={{ ...getTastingCoachInsight(roast, savedTasting), actionHref: undefined, actionLabel: undefined }} featured /><div className="mt-3 flex justify-end"><Link href={`/roasts/${id}`} className="btn-secondary tap-button inline-flex items-center gap-2">焙煎詳細へ戻る<ArrowLeft className="h-4 w-4 rotate-180" /></Link></div></section>}
-        <section className="space-y-6">
+        <section className="order-2 space-y-6 lg:order-1">
           <Panel title="基本情報">
             <div className="grid gap-4 md:grid-cols-3">
               <label className="block space-y-1">
@@ -255,17 +261,7 @@ export default function TastingPage() {
           </Panel>
         </section>
 
-        <section className="space-y-6">
-          <Panel title="おすすめ度">
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map(star => (
-                <button key={star} type="button" onClick={() => setRating(star)} className="tap-button p-1">
-                  <Star className={`h-8 w-8 ${star <= rating ? 'fill-current' : 'text-slate-700'}`} style={{ color: star <= rating ? tastingColor : undefined }} />
-                </button>
-              ))}
-            </div>
-          </Panel>
-
+        <section className="order-1 space-y-6 lg:order-2">
           <Panel title="フレーバー">
             <FlavorWheel
               activeCategory={activeCategory}
@@ -281,20 +277,30 @@ export default function TastingPage() {
             />
           </Panel>
 
-          <Panel title="ネガティブ要素">
+          <Panel title="おすすめ度">
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map(star => (
+                <button key={star} type="button" onClick={() => setRating(star)} className="tap-button p-1" aria-label={`おすすめ度 ${star}`}>
+                  <Star className={`h-8 w-8 ${star <= rating ? 'fill-current' : 'text-slate-700'}`} style={{ color: star <= rating ? tastingColor : undefined }} />
+                </button>
+              ))}
+            </div>
+          </Panel>
+
+          <CollapsiblePanel title="ネガティブ要素">
             <div className="flex flex-wrap gap-1.5">
               {NEGATIVE_OPTIONS.map(option => (
                 <Tag key={option} selected={negatives.includes(option)} danger onClick={() => toggleNegative(option)}>{option}</Tag>
               ))}
             </div>
-          </Panel>
+          </CollapsiblePanel>
 
-          <Panel title="メモ">
+          <CollapsiblePanel title="メモ">
             <textarea value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="抽出方法、湯温、挽き目、味の印象など" className="w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
             <textarea value={improvements} onChange={event => setImprovements(event.target.value)} rows={3} placeholder="次回の焙煎や抽出で試したいこと" className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
-          </Panel>
+          </CollapsiblePanel>
 
-          <Panel title="写真">
+          <CollapsiblePanel title="写真">
             {photos.length > 0 && (
               <div className="mb-3 grid grid-cols-3 gap-2">
                 {photos.map((src, index) => (
@@ -312,7 +318,7 @@ export default function TastingPage() {
               写真を選択
               <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" />
             </label>
-          </Panel>
+          </CollapsiblePanel>
         </section>
       </main>
     </div>
@@ -365,6 +371,15 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h2>
       {children}
     </section>
+  );
+}
+
+function CollapsiblePanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="lab-card-soft rounded-xl p-5">
+      <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</summary>
+      <div className="mt-4">{children}</div>
+    </details>
   );
 }
 

@@ -45,17 +45,18 @@ function NewRoastContent() {
   const searchParams = useSearchParams();
   const preselectedBeanId = searchParams.get('beanId');
 
-  const [beans, setBeans] = useState<Bean[]>(() => DBService.getBeans());
-  const [pastRoasts, setPastRoasts] = useState<Roast[]>(() => DBService.getRoasts());
+  const [beans, setBeans] = useState<Bean[]>([]);
+  const [pastRoasts, setPastRoasts] = useState<Roast[]>([]);
   const [tabMode, setTabMode] = useState<TabMode>('live');
   const [syncStatus, setSyncStatus] = useState('ローカル準備完了');
   const [syncError, setSyncError] = useState('');
+  const [hasPendingSync, setHasPendingSync] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showFirstCrackChoice, setShowFirstCrackChoice] = useState(false);
   const [estimatedFirstCrack, setEstimatedFirstCrack] = useState('');
 
-  const [roastId] = useState(() => DBService.generateNextRoastId());
-  const [beanId, setBeanId] = useState(() => preselectedBeanId || DBService.getBeans()[0]?.id || '');
+  const [roastId, setRoastId] = useState('');
+  const [beanId, setBeanId] = useState(preselectedBeanId || '');
   const [roastDate, setRoastDate] = useState(todayDateString());
   const [greenWeightInput, setGreenWeightInput] = useState('67');
   const [notes, setNotes] = useState('');
@@ -93,7 +94,6 @@ function NewRoastContent() {
     const loss = selectedBean?.weightLossPercentage ?? 15;
     return Math.round(greenWeight * (1 - loss / 100) * 10) / 10;
   }, [greenWeight, selectedBean]);
-  const lossRatio = calculateLossRatio(greenWeight, predictedRoastedWeight);
   const currentTime = secondsToTime(elapsedSecs);
   const devTime = firstCrackTime ? calculateDevTime(firstCrackTime, dropTime || currentTime) : null;
   const devRatio = firstCrackTime ? calculateDevRatio(firstCrackTime, dropTime || currentTime) : null;
@@ -103,6 +103,8 @@ function NewRoastContent() {
     const allBeans = DBService.getBeans();
     setBeans(allBeans);
     setPastRoasts(DBService.getRoasts());
+    setRoastId(current => current || DBService.generateNextRoastId());
+    setHasPendingSync(DBService.getPendingSyncCount() > 0);
     setBeanId(current => {
       if (current && allBeans.some(bean => bean.id === current)) return current;
       if (preselectedBeanId && allBeans.some(bean => bean.id === preselectedBeanId)) return preselectedBeanId;
@@ -111,6 +113,7 @@ function NewRoastContent() {
   }, [preselectedBeanId]);
 
   useEffect(() => {
+    const initialTimer = window.setTimeout(loadLocalData, 0);
     DBService.syncFromCloud().then(result => {
       if (result.ok) {
         loadLocalData();
@@ -136,7 +139,10 @@ function NewRoastContent() {
         });
       }
     }, 7000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [isRunning, loadLocalData]);
 
   useEffect(() => {
@@ -321,6 +327,7 @@ function NewRoastContent() {
     setIsSaving(true);
     setSyncError('');
     DBService.saveRoast(finalRoast, finalSteps, true);
+    setHasPendingSync(true);
     setIsSaving(false);
     setSyncStatus('ローカル保存済み。Google Sheetsはバックグラウンドで同期します');
     router.push(`/roasts/${roastId}`);
@@ -330,9 +337,11 @@ function NewRoastContent() {
     setSyncStatus('未同期データを再送中');
     const result = await DBService.retryPendingSync();
     if (result.ok) {
+      setHasPendingSync(false);
       setSyncStatus('未同期データを再送しました');
       setSyncError('');
     } else {
+      setHasPendingSync(true);
       setSyncStatus('再送失敗');
       setSyncError(result.error || 'Googleスプレッドシートへの再送に失敗しました。');
     }
@@ -366,7 +375,7 @@ function NewRoastContent() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden md:block"><SyncStatus message={syncStatus} tone={syncError ? 'error' : DBService.getPendingSyncCount() > 0 ? 'pending' : 'idle'} onRetry={retryPendingSync} compact /></div>
+          <div className="hidden md:block"><SyncStatus message={syncStatus} tone={syncError ? 'error' : hasPendingSync ? 'pending' : 'idle'} onRetry={retryPendingSync} compact /></div>
           <button onClick={saveRoast} disabled={isSaving} className="tap-button flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14] disabled:cursor-not-allowed disabled:opacity-60" style={{ backgroundColor: beanAccent }}>
           <Save className="h-4 w-4" />
           {isSaving ? '保存中' : '保存'}
@@ -386,8 +395,8 @@ function NewRoastContent() {
       </div>
 
       {tabMode === 'live' ? (
-        <main className="roast-control-grid gap-4 p-3 sm:p-4 lg:p-6">
-          <section className="roast-batch-panel space-y-4">
+        <main className={`roast-control-grid gap-4 p-3 sm:p-4 lg:p-6 ${hasStarted ? 'is-active' : ''}`}>
+          <section className={`roast-batch-panel space-y-4 ${hasStarted ? 'hidden' : ''}`}>
             <Panel title="バッチ設定">
               <label className="space-y-1 block">
                 <span className="text-xs text-[#8E8E93]">使用する生豆</span>
@@ -421,14 +430,13 @@ function NewRoastContent() {
               <div className="flex items-center justify-between text-left"><span className="eyebrow text-slate-500">{hasStarted ? 'Roasting in progress' : 'Ready for charge'}</span><span className="status-pill border-white/10 bg-white/[0.05]" style={{ color: beanAccent }}>{isRunning ? 'LIVE' : hasStarted ? 'PAUSED' : 'SETUP'}</span></div>
               <div className="timer-display mt-5 font-mono text-7xl font-black tracking-normal text-white sm:text-8xl lg:text-9xl">{currentTime}</div>
               <p className="mt-3 text-xs text-slate-400">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 大きなマイルストーンをタップ` : '豆・投入量・火力・風量を確認して、実験を始めます。'}</p>
-              <div className="mt-5 grid grid-cols-3 gap-2">
+              <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 gap-2">
                 <Stat label="Dev" value={devTime || '不明'} />
                 <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
-                <Stat label="Loss" value={`${lossRatio}%`} />
               </div>
               <div className="mx-auto mt-7 grid max-w-md grid-cols-[1.45fr_1fr] gap-3">
-                <button onClick={isRunning ? pauseRoast : startRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl py-3 font-bold text-[#080E14] shadow-lg" style={{ backgroundColor: beanAccent }}>
-                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{isRunning ? 'PAUSE' : hasStarted ? 'RESUME' : 'START'}
+                <button onClick={isRunning ? pauseRoast : startRoast} disabled={Boolean(dropTime)} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl py-3 font-bold text-[#080E14] shadow-lg disabled:opacity-55" style={{ backgroundColor: beanAccent }}>
+                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{dropTime ? 'COMPLETE' : isRunning ? 'PAUSE' : hasStarted ? 'RESUME' : 'START'}
                 </button>
                 <button onClick={resetRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] py-3 text-sm font-bold text-[#E4E4E7]"><RotateCcw className="h-4 w-4" /> RESET</button>
               </div>
@@ -439,9 +447,9 @@ function NewRoastContent() {
               )}
             </section>
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <MilestoneButton label="1st Crack" time={firstCrackTime} onClick={() => recordMilestone('1st Crack', 'firstCrackTime')} disabled={!hasStarted} color="orange" />
-              <MilestoneButton label="2nd Crack" time={secondCrackTime} onClick={() => recordMilestone('2nd Crack', 'secondCrackTime')} disabled={!hasStarted} color="red" />
-              <MilestoneButton label="Drop" time={dropTime} onClick={() => recordMilestone('Drop', 'dropTime')} disabled={!hasStarted} color="stone" />
+              <MilestoneButton label="1st Crack" time={firstCrackTime} onClick={() => recordMilestone('1st Crack', 'firstCrackTime')} disabled={!hasStarted || Boolean(dropTime)} color="orange" />
+              <MilestoneButton label="2nd Crack" time={secondCrackTime} onClick={() => recordMilestone('2nd Crack', 'secondCrackTime')} disabled={!hasStarted || Boolean(dropTime)} color="red" />
+              <MilestoneButton label="Drop" time={dropTime} onClick={() => recordMilestone('Drop', 'dropTime')} disabled={!hasStarted || Boolean(dropTime)} color="stone" />
             </div>
 
             <Panel title="火力・風量">
@@ -472,11 +480,6 @@ function NewRoastContent() {
           </section>
 
           <section className="roast-secondary-panel space-y-4">
-            <div className="hidden grid-cols-3 gap-2 lg:grid">
-              <Stat label="Loss" value={`${lossRatio}%`} />
-              <Stat label="Dev" value={devTime || '不明'} />
-              <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
-            </div>
             {dropCoachInsight && <CoachInsightCard insight={{ ...dropCoachInsight, actionHref: undefined, actionLabel: undefined }} featured />}
             {firstCrackTime && !dropTime && (
               <p className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100">
@@ -528,9 +531,17 @@ function NewRoastContent() {
               <Field label="焙煎日" type="date" value={roastDate} onChange={setRoastDate} />
               <Field label="投入量(g)" type="number" value={greenWeightInput} onChange={setGreenWeightInput} />
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="1st Crack" value={firstCrackTime} onChange={value => { setFirstCrackTime(value); setFirstCrackStatus(value ? 'recorded' : 'unknown'); }} />
+              <Field label="2nd Crack" value={secondCrackTime} onChange={setSecondCrackTime} />
+              <Field label="Drop" value={dropTime} onChange={setDropTime} />
+            </div>
             <div className="rounded-xl border border-[#232326] bg-[#1A1A1E] p-4">
               <div className="flex justify-between text-sm"><span className="text-[#8E8E93]">予想焙煎後重量</span><strong className="font-mono text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>
             </div>
+            <button type="button" onClick={saveRoast} disabled={!beanId || !dropTime || isSaving} className="btn-primary tap-button inline-flex w-full items-center justify-center gap-2 disabled:opacity-40">
+              <Save className="h-4 w-4" />手入力記録を保存
+            </button>
           </Panel>
         </main>
       )}

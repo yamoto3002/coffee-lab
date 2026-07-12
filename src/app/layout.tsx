@@ -5,13 +5,9 @@ import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
   applicationName: "Coffee Lab",
-  title: "Coffee Lab — Refined Roast OS",
-  description: "焙煎、テイスティング、次の実験をつなぐコーヒーラボ。",
+  title: "Coffee Lab — Roast, Taste, Learn",
+  description: "焙煎の経過、味の記憶、次の実験を静かにつなぐコーヒーラボ。",
   manifest: "/manifest.webmanifest",
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-  },
 };
 
 export const viewport = {

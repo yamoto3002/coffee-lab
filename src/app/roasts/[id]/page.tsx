@@ -8,7 +8,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import CoachInsightCard from '@/components/CoachInsightCard';
 import SyncStatus from '@/components/SyncStatus';
 import { getInsightsForRoast, getLiveRoastCoachInsight } from '@/lib/coach';
-import { DBService, getAgingDays, getRoastBatchBalance, secondsToTime, timeToSeconds } from '@/lib/db';
+import { DBService, getAgingDays, secondsToTime, timeToSeconds } from '@/lib/db';
 import { formatDate } from '@/lib/date';
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
 
@@ -96,7 +96,6 @@ export default function RoastDetailPage() {
 
   if (!roast) return null;
 
-  const balance = getRoastBatchBalance(roast, tastings, bean);
   const devText = roast.developmentTime && roast.developmentRatio !== null
     ? `${roast.developmentTime} / ${roast.developmentRatio}%`
     : '不明';
@@ -133,28 +132,7 @@ export default function RoastDetailPage() {
       {syncMessage && <div className="border-b border-white/10 bg-white/[0.025] px-4 py-2 md:px-6"><SyncStatus message={syncMessage} tone={syncMessage.includes('失敗') ? 'error' : 'success'} compact /></div>}
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 pb-28 md:p-6">
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Panel title="生豆">
-            {bean ? (
-              <div className="space-y-2">
-                <h2 className="break-words text-base font-bold">{bean.name}</h2>
-                <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-                  <span>国: <strong className="text-[#F4F4F6]">{bean.country}</strong></span>
-                  <span>精製: <strong className="text-[#F4F4F6]">{bean.process}</strong></span>
-                  <span>品種: <strong className="text-[#F4F4F6]">{bean.variety || '-'}</strong></span>
-                  <span>地域: <strong className="text-[#F4F4F6]">{bean.region || '-'}</strong></span>
-                </div>
-              </div>
-            ) : <p className="text-sm text-red-300">生豆データが見つかりません。</p>}
-          </Panel>
-
-          <Panel title="焙煎日">
-            <label className="block space-y-1">
-              <span className="text-xs text-slate-500">編集可能</span>
-              <input type="date" value={roast.roastDate} onChange={event => updateRoastDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
-            </label>
-          </Panel>
-
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[.72fr_1.28fr]">
           <Panel title="重量">
             <div className="grid grid-cols-2 gap-3">
               <Metric label="投入" value={`${roast.greenWeight}g`} />
@@ -169,8 +147,8 @@ export default function RoastDetailPage() {
           <Panel title="Crack / Drop">
             <div className="grid grid-cols-3 gap-2">
               <Metric label="1st" value={roast.firstCrackTime || '不明'} />
-              <Metric label="2nd" value={roast.secondCrackTime || '-'} />
-              <Metric label="Drop" value={roast.dropTime || '-'} />
+              <Metric label="2nd" value={roast.secondCrackTime || '不明'} />
+              <Metric label="Drop" value={roast.dropTime || '不明'} />
             </div>
             <div className="mt-4 flex justify-between border-t border-white/10 pt-3 font-mono text-sm">
               <span className="text-slate-500">Dev</span>
@@ -189,7 +167,7 @@ export default function RoastDetailPage() {
         )}
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Panel title="焙煎プロファイル">
+          <CollapsiblePanel title="焙煎プロファイル">
             <div className="h-72">
               {chartData.length > 1 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -204,9 +182,9 @@ export default function RoastDetailPage() {
                 </ResponsiveContainer>
               ) : <Empty text="プロファイル記録がまだ少ないです" />}
             </div>
-          </Panel>
+          </CollapsiblePanel>
 
-          <Panel title="タイムライン">
+          <CollapsiblePanel title="タイムライン">
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
               {steps.length === 0 ? <Empty text="タイムライン未登録" /> : steps.map(step => (
                 <div key={step.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-xs">
@@ -222,10 +200,10 @@ export default function RoastDetailPage() {
                 </div>
               ))}
             </div>
-          </Panel>
+          </CollapsiblePanel>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {roast.notes && (
             <Panel title="メモ">
               <div className="flex gap-2 text-sm text-slate-200">
@@ -234,16 +212,12 @@ export default function RoastDetailPage() {
               </div>
             </Panel>
           )}
-          <Panel title="バッチ残量">
-            <div className="space-y-2 text-sm">
-              <Row label="焙煎後見込み" value={`${balance.estimatedRoastedWeight}g`} />
-              <Row label="使用済み" value={`${balance.usedGrams}g`} />
-              <div className="rounded-xl bg-white/[0.05] p-3">
-                <span className="block text-xs text-slate-500">推定残量</span>
-                <strong className="font-mono text-2xl" style={{ color: accent }}>{balance.remainingGrams}g</strong>
-              </div>
-            </div>
-          </Panel>
+          <CollapsiblePanel title="記録の設定">
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-500">焙煎日</span>
+              <input type="date" value={roast.roastDate} onChange={event => updateRoastDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+            </label>
+          </CollapsiblePanel>
         </section>
 
         <section className="space-y-4">
@@ -304,20 +278,20 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+function CollapsiblePanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="lab-card-soft rounded-2xl p-5">
+      <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</summary>
+      <div className="mt-4">{children}</div>
+    </details>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-xl bg-white/[0.05] p-3 text-center">
       <span className="block text-[10px] text-slate-500">{label}</span>
       <strong className="block truncate font-mono text-lg">{value}</strong>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <strong className="font-mono text-[#F4F4F6]">{value}</strong>
     </div>
   );
 }

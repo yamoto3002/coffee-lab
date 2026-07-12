@@ -36,17 +36,15 @@ export function normalizeElapsedTime(value: unknown): string {
   // Historic Google Sheets time cells may have been serialized against the
   // Excel epoch. Recover only that known legacy shape. A normal ISO timestamp
   // is a clock time and must never leak into an elapsed-time field.
-  if (/^(?:1899|1900)-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw)) {
-    const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) {
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-      }).formatToParts(parsed);
-      const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(item => item.type === type)?.value || 0);
-      const seconds = part('hour') * 3600 + part('minute') * 60 + part('second');
-      return seconds <= 21600 ? secondsToTime(seconds) : '';
-    }
-    return '';
+  const legacyDate = raw.match(/^(?:1899|1900)-\d{2}-\d{2}[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (legacyDate) {
+    // Read the legacy cell's clock portion literally. Applying a timezone here
+    // shifts elapsed time and was the source of several incorrect Crack values.
+    const hours = Number(legacyDate[1]);
+    const minutes = Number(legacyDate[2]);
+    const seconds = Number(legacyDate[3] || 0);
+    const total = hours * 3600 + minutes * 60 + seconds;
+    return minutes < 60 && seconds < 60 && total <= 21600 ? secondsToTime(total) : '';
   }
 
   const hms = raw.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
@@ -70,6 +68,25 @@ export function normalizeElapsedTime(value: unknown): string {
   }
 
   return '';
+}
+
+export type RoastMilestoneTimes = {
+  firstCrackTime: string;
+  secondCrackTime: string;
+  dropTime: string;
+};
+
+export function getMilestoneTimesFromSteps(steps: Partial<RoastStep>[]): RoastMilestoneTimes {
+  const result: RoastMilestoneTimes = { firstCrackTime: '', secondCrackTime: '', dropTime: '' };
+  for (const step of steps) {
+    const time = normalizeElapsedTime(step.time);
+    if (!time) continue;
+    const memo = String(step.memo || '').trim().toLowerCase();
+    if (!result.firstCrackTime && /^(1st crack|first crack)(?:\b|\s|\/)/i.test(memo)) result.firstCrackTime = time;
+    if (!result.secondCrackTime && /^(2nd crack|second crack)(?:\b|\s|\/)/i.test(memo)) result.secondCrackTime = time;
+    if (!result.dropTime && /^(drop)(?:\b|\s|\/)/i.test(memo)) result.dropTime = time;
+  }
+  return result;
 }
 
 export function calculateDevTime(firstCrack: string | null | undefined, drop: string | null | undefined): string | null {
@@ -393,7 +410,9 @@ function enqueuePendingSync(payload: CloudSyncPayload): void {
 
 function userFriendlySyncError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || '');
-  console.error('Google Sheets sync detail:', error);
+  if (!/GOOGLE_APPS_SCRIPT_URL.*未設定/i.test(message)) {
+    console.error('Google Sheets sync detail:', error);
+  }
   if (/json|html|<!doctype|<html|apps script/i.test(message)) {
     return 'Google Sheetsとの同期に失敗しました。バックグラウンドで再試行します。';
   }
@@ -519,10 +538,17 @@ export const DBService = {
   saveRoast(roast: Roast, steps: RoastStep[], sync = true): Roast {
     const roasts = this.getRoasts();
     const index = roasts.findIndex(item => item.id === roast.id);
+    const timelineMilestones = getMilestoneTimesFromSteps(steps);
+    const canonicalFirstCrack = timelineMilestones.firstCrackTime || roast.firstCrackTime;
+    const canonicalSecondCrack = timelineMilestones.secondCrackTime || roast.secondCrackTime;
+    const canonicalDrop = timelineMilestones.dropTime || roast.dropTime;
     const processed = normalizeRoast({
       ...roast,
-      developmentTime: calculateDevTime(roast.firstCrackTime, roast.dropTime),
-      developmentRatio: calculateDevRatio(roast.firstCrackTime, roast.dropTime),
+      firstCrackTime: canonicalFirstCrack,
+      secondCrackTime: canonicalSecondCrack,
+      dropTime: canonicalDrop,
+      developmentTime: calculateDevTime(canonicalFirstCrack, canonicalDrop),
+      developmentRatio: calculateDevRatio(canonicalFirstCrack, canonicalDrop),
       lossRatio: calculateLossRatio(roast.greenWeight, roast.roastedWeight),
       updatedAt: new Date().toISOString(),
     });
