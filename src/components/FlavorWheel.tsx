@@ -93,7 +93,7 @@ export default function FlavorWheel({
       </div>
 
       <div className="mt-5">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">2. Character</p>
+        <p className="mb-2 text-xs font-semibold text-slate-400">2. 印象</p>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1" aria-label={`${category.label}のサブカテゴリ`}>
           {category.subcategories.map(item => (
             <button
@@ -112,7 +112,7 @@ export default function FlavorWheel({
       </div>
 
       <div className="mt-4">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">3. Note</p>
+        <p className="mb-2 text-xs font-semibold text-slate-400">3. 具体的な香味</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {subcategory.flavors.map(flavor => {
             const active = selected.includes(flavor.label);
@@ -136,7 +136,7 @@ export default function FlavorWheel({
       </div>
 
       <div className="mt-5 min-h-10 border-t border-white/[0.07] pt-4" aria-live="polite">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Selected</p>
+        <p className="mb-2 text-xs font-semibold text-slate-400">選択中</p>
         <div className="flex flex-wrap gap-2">
           {selected.map(label => (
             <button key={label} type="button" onClick={() => onRemove(label)} className="tap-button inline-flex min-w-0 items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: `${flavorColor(label)}55`, backgroundColor: `${flavorColor(label)}12`, color: flavorColor(label) }} aria-label={`${label}を削除`}>

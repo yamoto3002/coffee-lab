@@ -92,17 +92,17 @@ export default function SettingsPage() {
   const resetCloudAndLocal = async () => {
     if (confirmText !== 'RESET') return;
     setIsBusy(true);
-    DBService.resetLocalData();
     const result = await DBService.resetCloudData();
+    if (result.ok) DBService.resetLocalData();
     setIsBusy(false);
     setConfirmText('');
     loadStats();
-    showMsg(result.ok ? 'success' : 'error', result.ok ? 'ローカルとGoogle Sheetsをリセットしました。' : result.error || 'Google Sheetsのリセットに失敗しました。ローカルは削除済みです。');
+    showMsg(result.ok ? 'success' : 'error', result.ok ? 'ローカルとGoogle Sheetsをリセットしました。' : result.error || 'Google Sheetsのリセットに失敗したため、ローカルデータは保持しました。');
   };
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur md:px-6">
+      <header className="border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:px-6">
         <div className="flex items-center gap-3">
           {view !== 'main' && (
             <button onClick={() => setView(view === 'danger' ? 'data' : 'main')} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="戻る">
@@ -110,8 +110,8 @@ export default function SettingsPage() {
             </button>
           )}
           <div>
-            <h1 className="text-xl font-bold tracking-wide">設定</h1>
-            <p className="text-xs text-slate-400">同期、バックアップ、データ管理</p>
+            <h1 className="page-title">設定</h1>
+            <p className="text-sm text-[var(--muted-foreground)]">同期、バックアップ、データ管理</p>
           </div>
         </div>
       </header>
@@ -122,8 +122,8 @@ export default function SettingsPage() {
         {view === 'main' && (
           <>
             <section className="lab-card-soft space-y-5 rounded-xl p-6">
-              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
-                <Cloud className="h-4 w-4 text-cyan-200" />
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+                <Cloud className="h-4 w-4 text-[var(--accent)]" />
                 同期とバックアップ
               </h2>
 
@@ -151,16 +151,16 @@ export default function SettingsPage() {
             </section>
 
             <section className="lab-card-soft rounded-xl p-6">
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
-                <FileText className="h-4 w-4 text-cyan-200" />
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-300">
+                <FileText className="h-4 w-4 text-[var(--accent)]" />
                 レポート
               </h2>
               <p className="text-sm text-slate-400">印刷向けの焙煎レポートを開きます。</p>
-              <Link href="/report" className="tap-button mt-4 inline-flex rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">レポートを開く</Link>
+              <Link href="/report" className="btn-primary tap-button mt-4 inline-flex">レポートを開く</Link>
             </section>
 
             <section className="lab-card-soft rounded-xl p-6">
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-300">
                 <ShieldAlert className="h-4 w-4 text-amber-200" />
                 データ管理
               </h2>
@@ -172,7 +172,7 @@ export default function SettingsPage() {
 
         {view === 'data' && (
           <section className="lab-card-soft space-y-5 rounded-xl p-6">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
               <ShieldAlert className="h-4 w-4 text-amber-200" />
               データ管理
             </h2>
@@ -196,7 +196,7 @@ export default function SettingsPage() {
             </div>
             <label className="block space-y-2">
               <span className="text-sm font-semibold text-red-100">実行するには RESET と入力してください</span>
-              <input value={confirmText} onChange={event => setConfirmText(event.target.value)} className="w-full rounded-lg border border-red-300/30 bg-[#101827] px-3 py-2 text-sm text-red-100" />
+              <input value={confirmText} onChange={event => setConfirmText(event.target.value)} autoComplete="off" spellCheck={false} className="w-full rounded-lg border border-red-300/30 bg-[#101827] px-3 py-2 text-base text-red-100" />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <button onClick={resetLocal} disabled={confirmText !== 'RESET' || isBusy} className="tap-button rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
@@ -218,7 +218,7 @@ function Stats({ beans, roasts, tastings }: { beans: number; roasts: number; tas
     <div className="grid grid-cols-3 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 text-center text-xs text-slate-400">
       <Stat label="生豆" value={`${beans}件`} />
       <Stat label="焙煎" value={`${roasts}件`} />
-      <Stat label="テイスティング" value={`${tastings}件`} />
+      <Stat label="味見" value={`${tastings}件`} />
     </div>
   );
 }
@@ -226,7 +226,7 @@ function Stats({ beans, roasts, tastings }: { beans: number; roasts: number; tas
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <span className="block text-[10px] text-slate-500">{label}</span>
+      <span className="block text-xs text-slate-400">{label}</span>
       <span className="block truncate font-mono text-lg font-bold text-[#F4F4F6]">{value}</span>
     </div>
   );

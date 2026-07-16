@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
       lang="ja"
       className="h-full antialiased dark"
     >
-      <body className="min-h-full text-[#F5F7FA] overflow-x-hidden">
+      <body className="min-h-full overflow-x-hidden text-[var(--foreground)]">
         <div className="flex min-h-screen flex-col md:flex-row relative z-10">
           <Navigation />
           <main className="flex-1 pb-20 md:pb-0 min-h-screen relative overflow-x-hidden">

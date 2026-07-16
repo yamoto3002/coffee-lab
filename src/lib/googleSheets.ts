@@ -212,6 +212,9 @@ function normalizeTasting(row: Record<string, unknown>): Tasting {
     tastingDate: normalizeDateOnly(row.tastingDate),
     dayAfterRoast: toNumber(row.dayAfterRoast, toNumber(row.tastingDay)),
     doseGrams: toNumber(row.doseGrams),
+    doseGramsRecorded: row.doseGramsRecorded === undefined
+      ? row.doseGrams !== undefined && row.doseGrams !== null && row.doseGrams !== '' && Number(row.doseGrams) > 0
+      : row.doseGramsRecorded === true || String(row.doseGramsRecorded).toLowerCase() === 'true',
     fragrance: toNumber(row.fragrance),
     aroma: toNumber(row.aroma),
     flavor: toNumber(row.flavor),
@@ -307,6 +310,7 @@ function tastingToAppsScriptRow(tasting: Tasting): Record<string, unknown> {
     dayAfterRoast: tasting.dayAfterRoast,
     tastingDay: tasting.dayAfterRoast,
     doseGrams: tasting.doseGrams,
+    doseGramsRecorded: tasting.doseGramsRecorded ?? true,
     score: tasting.score,
     fragrance: tasting.fragrance,
     aroma: tasting.aroma,

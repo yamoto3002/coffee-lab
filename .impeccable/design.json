@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-13T17:55:00+09:00",
+  "title": "Design System: Coffee Lab",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Kiln Canvas", "canonical": "#0C0E0E", "tonalRamp": ["#070808", "#0C0E0E", "#171A19", "#2A2F2D", "#505854", "#7C857F", "#B8BEB9", "#F2F3EE"] },
+      "surface": { "role": "neutral", "displayName": "Bench Surface", "canonical": "#131716", "tonalRamp": ["#090B0A", "#131716", "#202624", "#333B38", "#59635F", "#858E88", "#BEC4BF", "#F2F3EE"] },
+      "copper": { "role": "primary", "displayName": "Roaster Copper", "canonical": "#D9A066", "tonalRamp": ["#28180C", "#4E2E16", "#754824", "#9D693B", "#C78C55", "#D9A066", "#EAC49A", "#FAE9D4"] },
+      "info": { "role": "secondary", "displayName": "Instrument Teal", "canonical": "#70C8C3", "tonalRamp": ["#092321", "#123F3C", "#1F615C", "#33877F", "#52AFA8", "#70C8C3", "#A7E0DC", "#E4F5F3"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Page headline", "purpose": "One operational page title." },
+      "body": { "displayName": "Japanese body", "purpose": "Readable instructions and supporting copy." },
+      "label": { "displayName": "Control label", "purpose": "Controls, metadata, and explicit state text." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 4px 8px rgba(0,0,0,0.28)", "purpose": "Menus, dialogs, and sticky controls only." }
+    ],
+    "motion": [
+      { "name": "state-fast", "value": "160ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Hover, focus, selected, and pressed feedback." },
+      { "name": "panel", "value": "220ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Progressive disclosure and dialog transitions." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single primary action in a task region.",
+      "html": "<button class=\"ds-btn-primary\">焙煎を開始</button>",
+      "css": ".ds-btn-primary{min-height:44px;border:0;border-radius:10px;padding:12px 18px;background:var(--primary,#D9A066);color:#1B120A;font:700 14px system-ui;transition:filter 160ms cubic-bezier(.22,1,.36,1),transform 160ms cubic-bezier(.22,1,.36,1)}.ds-btn-primary:hover{filter:brightness(1.06)}.ds-btn-primary:focus-visible{outline:2px solid #70C8C3;outline-offset:2px}.ds-btn-primary:active{transform:scale(.98)}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A labeled, high-contrast product field.",
+      "html": "<label class=\"ds-field\"><span>投入量</span><input value=\"67\" aria-label=\"投入量（グラム）\"><small>g</small></label>",
+      "css": ".ds-field{display:grid;grid-template-columns:1fr auto;gap:6px;color:#AEB6AE;font:650 13px system-ui}.ds-field span{grid-column:1/-1}.ds-field input{min-height:44px;border:1px solid #303734;border-radius:10px;padding:10px 12px;background:#131716;color:#F2F3EE;font:600 15px system-ui}.ds-field input:focus-visible{outline:2px solid #70C8C3;outline-offset:2px}.ds-field small{align-self:center;color:#AEB6AE}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "description": "A labeled destination with a restrained selected state.",
+      "html": "<a class=\"ds-nav-item\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z\"/></svg><span>ホーム</span></a>",
+      "css": ".ds-nav-item{display:flex;min-height:44px;align-items:center;gap:10px;border-radius:10px;padding:10px 12px;background:#241D17;color:#F1C89C;font:650 14px system-ui;text-decoration:none}.ds-nav-item:focus-visible{outline:2px solid #70C8C3;outline-offset:2px}"
+    },
+    {
+      "name": "Sync Status",
+      "kind": "custom",
+      "description": "An explicit state sentence with recovery context.",
+      "html": "<p class=\"ds-sync\"><span aria-hidden=\"true\">!</span><strong>クラウド未接続</strong><small>記録はこの端末に保存されます</small></p>",
+      "css": ".ds-sync{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0;border:1px solid #5A4A2D;border-radius:10px;padding:10px 12px;background:#211C12;color:#F3D9A6;font:13px system-ui}.ds-sync span{grid-row:1/3}.ds-sync strong{font-weight:700}.ds-sync small{color:#D9C59E}"
+    }
+  ],
+  "narrative": {
+    "northStar": "焙煎台の計器盤",
+    "overview": "A calm, dark instrument bench beside a working roaster. Task sequence, explicit state, and dependable numeric data carry the experience; decoration never competes with the roast.",
+    "keyCharacteristics": ["Restrained dark tonal layers", "Japanese-first labels", "Flat-by-default surfaces", "One primary action per region", "Explicit persistence and sync state"],
+    "rules": [
+      { "name": "Copper Budget", "body": "Copper occupies less than ten percent of a routine screen.", "section": "colors" },
+      { "name": "State Sentence", "body": "Semantic color always appears with an icon and plain-language status.", "section": "colors" },
+      { "name": "Bench", "body": "If spacing and a divider explain the group, it is not a card.", "section": "elevation" }
+    ],
+    "dos": ["Do make the next useful action visible in the initial viewport.", "Do keep touch targets at least 44 by 44 CSS pixels."],
+    "donts": ["Don't use marketing hero composition or generic AI/SaaS card grids.", "Don't use neon cyberpunk styling, purple gradients, decorative grids, glassmorphism, backdrop blur, constant glow, or gradient text."]
+  }
+}

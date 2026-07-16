@@ -125,12 +125,30 @@ export function estimateRoastedWeight(roast: Roast, bean?: Bean | null): number 
 }
 
 export function getRoastBatchBalance(roast: Roast, tastings: Tasting[], bean?: Bean | null) {
-  const estimatedRoastedWeight = estimateRoastedWeight(roast, bean);
-  const usedGrams = Math.round(tastings
+  const completed = tastings
     .filter(tasting => tasting.roastId === roast.id && tasting.status === 'completed')
-    .reduce((sum, tasting) => sum + toNumber(tasting.doseGrams), 0) * 10) / 10;
-  const remainingGrams = Math.max(0, Math.round((estimatedRoastedWeight - usedGrams) * 10) / 10);
-  return { estimatedRoastedWeight, usedGrams, remainingGrams };
+    .sort((a, b) => a.tastingDate.localeCompare(b.tastingDate) || a.tastingIndex - b.tastingIndex);
+  const baseWeight = estimateRoastedWeight(roast, bean);
+  const isMeasured = roast.roastedWeight > 0;
+  const validDoses = completed.filter(tasting => tasting.doseGramsRecorded !== false && tasting.doseGrams > 0 && tasting.doseGrams <= 100);
+  const usedGrams = Math.round(validDoses.reduce((sum, tasting) => sum + tasting.doseGrams, 0) * 10) / 10;
+  const rawRemaining = Math.round((baseWeight - usedGrams) * 10) / 10;
+  const remainingGrams = Math.max(0, rawRemaining);
+  const latestDose = [...validDoses].reverse()[0]?.doseGrams;
+  const averageDose = validDoses.length ? usedGrams / validDoses.length : 0;
+  const servingDose = latestDose || averageDose || 11;
+  return {
+    baseWeight,
+    estimatedRoastedWeight: baseWeight,
+    baseKind: isMeasured ? 'measured' as const : 'estimated' as const,
+    usedGrams,
+    remainingGrams,
+    remainingRatio: baseWeight > 0 ? Math.max(0, Math.round((remainingGrams / baseWeight) * 100)) : 0,
+    estimatedServings: servingDose > 0 ? Math.floor(remainingGrams / servingDose) : 0,
+    servingDose: Math.round(servingDose * 10) / 10,
+    missingDoseCount: completed.filter(tasting => tasting.doseGramsRecorded === false).length,
+    overageGrams: Math.max(0, Math.round((usedGrams - baseWeight) * 10) / 10),
+  };
 }
 
 const STORAGE_KEYS = {
@@ -303,6 +321,7 @@ function toNullableNumber(value: unknown, fallback: number | null): number | nul
 }
 
 function normalizeTasting(tasting: Partial<Tasting>, roast?: Roast): Tasting {
+  const rawDose = (tasting as { doseGrams?: unknown }).doseGrams;
   const tastingDate = normalizeDateOnly(tasting.tastingDate) || todayDateString();
   const dayAfterRoast = roast ? Math.max(0, diffDateDays(roast.roastDate, tastingDate)) : toNumber(tasting.dayAfterRoast, toNumber(tasting.tastingDay));
   const tastingIndex = toNumber(tasting.tastingIndex, toNumber(tasting.tastingDay, 1));
@@ -314,6 +333,7 @@ function normalizeTasting(tasting: Partial<Tasting>, roast?: Roast): Tasting {
     tastingDate,
     dayAfterRoast,
     doseGrams: toNumber(tasting.doseGrams),
+    doseGramsRecorded: tasting.doseGramsRecorded ?? (rawDose !== undefined && rawDose !== null && rawDose !== '' && Number(rawDose) > 0),
     fragrance: toNumber(tasting.fragrance),
     aroma: toNumber(tasting.aroma),
     flavor: toNumber(tasting.flavor),

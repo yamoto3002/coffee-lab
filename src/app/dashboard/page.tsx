@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, ChartNoAxesCombined, ChevronRight, Flame, GitCompareArrows, RefreshCw, TestTube2 } from 'lucide-react';
+import { CalendarDays, ChartNoAxesCombined, ChevronRight, Flame, GitCompareArrows, TestTube2 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import CoachInsightCard from '@/components/CoachInsightCard';
 import EmptyState from '@/components/EmptyState';
 import SyncStatus from '@/components/SyncStatus';
-import { getCoachInsights } from '@/lib/coach';
+import { getCoachInsights, getInsightsForRoast } from '@/lib/coach';
 import { DBService } from '@/lib/db';
 import { addDateDays, parseDateOnly, todayDateString } from '@/lib/date';
 import { Bean, Roast, Tasting } from '@/types';
@@ -46,6 +46,7 @@ export default function DashboardPage() {
 
   const insights = useMemo(() => getCoachInsights({ beans, roasts, tastings }), [beans, roasts, tastings]);
   const latestRoast = useMemo(() => [...roasts].sort((a, b) => b.roastDate.localeCompare(a.roastDate) || b.id.localeCompare(a.id))[0], [roasts]);
+  const primaryInsight = latestRoast ? getInsightsForRoast({ beans, roasts, tastings }, latestRoast.id)[0] || insights[0] : insights[0];
   const tastingInsight = insights.find(insight => insight.type === 'tasting' && insight.actionHref);
   const calendar = useMemo(() => buildCalendar(roasts, beans), [roasts, beans]);
   const trendData = useMemo(() => [...roasts].sort((a, b) => a.roastDate.localeCompare(b.roastDate) || a.id.localeCompare(b.id)).slice(-10).map(roast => ({ id: roast.id, loss: roast.lossRatio || undefined, dev: roast.developmentRatio ?? undefined })), [roasts]);
@@ -57,44 +58,49 @@ export default function DashboardPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-white/10 bg-[#080b14]/82 px-5 py-5 backdrop-blur-xl md:flex-row md:items-center md:justify-between md:px-8">
-        <div><p className="eyebrow text-cyan-200">Sensory Lab</p><h1 className="mt-2 page-title">分析と次の仮説</h1><p className="mt-2 text-sm text-slate-400">数字を眺めるより先に、次に試すことを決める場所です。</p></div>
-        <div className="flex items-center gap-2"><SyncStatus message={syncMessage} tone={syncTone} onRetry={() => void syncFromCloud()} compact /><button onClick={() => void syncFromCloud()} className="tap-button rounded-xl border border-white/10 bg-white/[0.05] p-2.5 text-slate-300" aria-label="再同期"><RefreshCw className="h-4 w-4" /></button></div>
+      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-5 py-5 md:flex-row md:items-center md:justify-between md:px-8">
+        <div><h1 className="page-title">分析と次の仮説</h1><p className="mt-2 text-sm text-slate-400">数字を眺めるより先に、次に試すことを決める場所です。</p></div>
+        <SyncStatus message={syncMessage} tone={syncTone} onRetry={() => void syncFromCloud()} compact />
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-8 p-5 pb-28 md:p-8">
         <section>
-          <div className="mb-4 flex items-end justify-between gap-4"><div><p className="eyebrow text-fuchsia-300">AI Coach summary</p><h2 className="mt-2 text-xl font-semibold text-white">今週の観察メモ</h2></div><span className="text-xs text-slate-500">実データのみ</span></div>
+          <div className="mb-4 flex items-end justify-between gap-4"><h2 className="text-xl font-semibold text-[var(--foreground)]">記録から見えたこと</h2><span className="text-xs text-slate-400">端末内の実データから算出</span></div>
           <div className="max-w-4xl">
-            {insights[0] && <CoachInsightCard insight={insights[0]} featured />}
+            {primaryInsight && <CoachInsightCard insight={primaryInsight} featured />}
           </div>
         </section>
 
         <section>
-          <div className="mb-4"><p className="eyebrow text-cyan-200">Actions</p><h2 className="mt-2 text-xl font-semibold text-white">次のアクション</h2></div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Action href={tastingInsight?.actionHref || `/roasts/${latestRoast.id}/tasting/1`} icon={<TestTube2 className="h-5 w-5" />} label="テイスティングを記録" description="味の変化を残す" color="#00F0FF" />
-            <Action href="/roasts/new" icon={<Flame className="h-5 w-5" />} label="次の焙煎を開始" description="仮説を一つ試す" color="#FFB86B" />
-            <Action href="/roasts/compare" icon={<GitCompareArrows className="h-5 w-5" />} label="比較を見る" description="条件の違いを追う" color="#8C00FF" />
+          <div className="mb-4"><h2 className="text-xl font-semibold text-[var(--foreground)]">次のアクション</h2></div>
+          <div className="border-y border-[var(--border)] py-5">
+            <Link href={tastingInsight?.actionHref || `/roasts/${latestRoast.id}/tasting/1`} className="tap-button flex items-center justify-between gap-4 rounded-[10px] bg-[var(--primary)] px-5 py-4 font-bold text-[var(--primary-foreground)]">
+              <span className="flex items-center gap-3"><TestTube2 className="h-5 w-5" /><span>味見を記録して仮説を進める</span></span><ChevronRight className="h-5 w-5" />
+            </Link>
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <Link href="/roasts/new" className="tap-button inline-flex min-h-11 items-center gap-2 font-semibold text-[var(--text-secondary)]"><Flame className="h-4 w-4 text-[var(--primary)]" />次の焙煎を開始</Link>
+              <Link href="/roasts/compare" className="tap-button inline-flex min-h-11 items-center gap-2 font-semibold text-[var(--text-secondary)]"><GitCompareArrows className="h-4 w-4 text-[var(--flavor-floral)]" />条件を比較</Link>
+            </div>
           </div>
         </section>
 
         <section>
-          <div className="lab-card-soft p-5 md:p-6"><div className="flex items-center justify-between gap-3"><div><p className="eyebrow text-cyan-200">Roast timeline</p><h2 className="mt-2 text-lg font-semibold text-white">今月の焙煎とテイスティング目安</h2></div><CalendarDays className="h-5 w-5 text-cyan-100" /></div><CalendarGrid monthLabel={calendar.monthLabel} days={calendar.days} /></div>
+          <div className="lab-card-soft p-5 md:p-6"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--foreground)]">次の味見予定</h2><CalendarDays className="h-5 w-5 text-[var(--accent)]" /></div><div className="md:hidden"><UpcomingList days={calendar.days} /></div><div className="hidden md:block"><CalendarGrid monthLabel={calendar.monthLabel} days={calendar.days} /></div></div>
         </section>
 
-        {canShowTrend && <section className="lab-card-soft p-5 md:p-6"><div className="mb-5"><p className="eyebrow text-fuchsia-300">Useful trends</p><h2 className="mt-2 text-lg font-semibold text-white">Loss / Dev% の推移</h2><p className="mt-1 text-xs text-slate-500">直近の記録が3件以上あるときだけ表示します。</p></div><div className="h-64 md:h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" /><XAxis dataKey="id" stroke="#94A3B8" fontSize={10} /><YAxis stroke="#94A3B8" fontSize={10} /><Tooltip contentStyle={{ background: '#0e1423', border: '1px solid rgba(255,255,255,.12)', borderRadius: '12px', color: '#f5f7fa' }} /><Line type="monotone" dataKey="loss" name="Loss (%)" stroke="#FFB86B" strokeWidth={2.5} connectNulls /><Line type="monotone" dataKey="dev" name="Dev (%)" stroke="#00F0FF" strokeWidth={2.5} connectNulls /></LineChart></ResponsiveContainer></div></section>}
+        {canShowTrend && <section className="lab-card-soft p-5 md:p-6"><div className="mb-5"><h2 className="text-lg font-semibold text-[var(--foreground)]">Loss / Dev% の推移</h2><p className="mt-1 text-xs text-slate-400">直近の記録が3件以上あるときだけ表示します。</p></div><div className="h-64 md:h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="id" stroke="var(--muted-foreground)" fontSize={12} /><YAxis stroke="var(--muted-foreground)" fontSize={12} /><Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--foreground)' }} /><Line type="monotone" dataKey="loss" name="Loss (%)" stroke="var(--primary)" strokeWidth={2.5} connectNulls /><Line type="monotone" dataKey="dev" name="Dev (%)" stroke="var(--accent)" strokeWidth={2.5} connectNulls /></LineChart></ResponsiveContainer></div></section>}
       </main>
     </div>
   );
 }
 
-function Action({ href, icon, label, description, color }: { href: string; icon: React.ReactNode; label: string; description: string; color: string }) {
-  return <Link href={href} className="tap-button lab-card-soft min-w-[220px] snap-start p-5 sm:min-w-0" style={{ borderColor: `${color}38` }}><span className="flex h-10 w-10 items-center justify-center rounded-xl border" style={{ color, backgroundColor: `${color}14`, borderColor: `${color}30` }}>{icon}</span><span className="mt-5 flex items-center justify-between gap-2 text-sm font-semibold text-white">{label}<ChevronRight className="h-4 w-4" style={{ color }} /></span><span className="mt-1 block text-xs text-slate-400">{description}</span></Link>;
+function UpcomingList({ days }: { days: { key: string; today: boolean; items: CalendarItem[] }[] }) {
+  const upcoming = days.filter(day => day.key >= todayDateString()).flatMap(day => day.items.filter(item => item.kind === 'tasting').map(item => ({ ...item, date: day.key, today: day.today }))).slice(0, 5);
+  return <div className="mt-5 divide-y divide-[var(--border)]">{upcoming.length ? upcoming.map(item => <Link key={item.id} href={item.href} className="tap-button flex min-h-14 items-center justify-between gap-3 py-3"><span><strong className="block text-sm text-[var(--foreground)]">{item.label}</strong><span className="text-xs text-[var(--muted-foreground)]">{item.today ? '今日' : item.date}</span></span><ChevronRight className="h-4 w-4 text-[var(--accent)]" /></Link>) : <p className="py-5 text-sm text-[var(--muted-foreground)]">直近の味見予定はありません。</p>}</div>;
 }
 
 function CalendarGrid({ days, monthLabel }: { days: { key: string; day: number; current: boolean; today: boolean; items: CalendarItem[] }[]; monthLabel: string }) {
-  return <div className="mt-6"><div className="mb-3 flex items-center justify-between"><span className="font-mono text-sm font-semibold text-white">{monthLabel}</span><span className="text-[10px] text-slate-500">焙煎 / Day7</span></div><div className="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-500">{['日', '月', '火', '水', '木', '金', '土'].map(label => <span key={label} className="py-1">{label}</span>)}</div><div className="grid grid-cols-7 gap-1">{days.map(day => <div key={day.key} className={`min-h-[66px] rounded-xl border p-1.5 text-left ${day.current ? 'border-white/[.08] bg-white/[.025]' : 'border-transparent opacity-30'} ${day.today ? 'ring-1 ring-cyan-300/45' : ''}`}><span className={`ml-1 text-[10px] ${day.today ? 'font-bold text-cyan-100' : 'text-slate-500'}`}>{day.day}</span><div className="mt-1 space-y-1">{day.items.slice(0, 2).map(item => <Link key={item.id} href={item.href} title={item.label} className="block truncate rounded px-1 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: `${item.color}18`, color: item.color }}>{item.label}</Link>)}</div></div>)}</div></div>;
+  return <div className="mt-6"><div className="mb-3 flex items-center justify-between"><span className="font-mono text-sm font-semibold text-white">{monthLabel}</span><span className="text-xs text-slate-400">焙煎 / 7日目の味見</span></div><div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-400">{['日', '月', '火', '水', '木', '金', '土'].map(label => <span key={label} className="py-1">{label}</span>)}</div><div className="grid grid-cols-7 gap-1">{days.map(day => <div key={day.key} className={`min-h-[66px] rounded-[10px] border p-1.5 text-left ${day.current ? 'border-white/[.08] bg-white/[.025]' : 'border-transparent opacity-30'} ${day.today ? 'ring-1 ring-[var(--primary)]' : ''}`}><span className={`ml-1 text-xs ${day.today ? 'font-bold text-[var(--primary)]' : 'text-slate-400'}`}>{day.day}</span><div className="mt-1 space-y-1">{day.items.slice(0, 2).map(item => <Link key={item.id} href={item.href} title={item.label} className="block truncate rounded px-1 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${item.color}18`, color: item.color }}>{item.label}</Link>)}</div></div>)}</div></div>;
 }
 
 function buildCalendar(roasts: Roast[], beans: Bean[]) {
@@ -105,10 +111,10 @@ function buildCalendar(roasts: Roast[], beans: Bean[]) {
   const itemsByDate = new Map<string, CalendarItem[]>();
   const add = (date: string, item: CalendarItem) => itemsByDate.set(date, [...(itemsByDate.get(date) || []), item]);
   roasts.forEach(roast => {
-    const color = beanFor(roast.beanId)?.themeColor || '#FFB86B';
+    const color = beanFor(roast.beanId)?.themeColor || '#D9A066';
     add(roast.roastDate, { id: `roast-${roast.id}`, label: `${roast.id} 焙煎`, href: `/roasts/${roast.id}`, color, kind: 'roast' });
     const day7 = addDateDays(roast.roastDate, 7);
-    add(day7, { id: `tasting-${roast.id}`, label: `${roast.id} Day7`, href: `/roasts/${roast.id}/tasting/7`, color: '#00F0FF', kind: 'tasting' });
+    add(day7, { id: `tasting-${roast.id}`, label: `${roast.id} 7日目`, href: `/roasts/${roast.id}/tasting/7`, color: '#70C8C3', kind: 'tasting' });
   });
   const days = Array.from({ length: 42 }, (_, index) => { const date = new Date(first); date.setDate(first.getDate() + index); const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; return { key, day: date.getDate(), current: date.getMonth() === now.getMonth(), today: key === todayDateString(), items: itemsByDate.get(key) || [] }; });
   return { monthLabel: `${now.getFullYear()}年${now.getMonth() + 1}月`, days };

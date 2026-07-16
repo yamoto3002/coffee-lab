@@ -68,6 +68,8 @@ export interface Tasting {
   tastingDate: string; // YYYY-MM-DD
   dayAfterRoast: number;
   doseGrams: number;
+  /** Distinguishes an intentionally entered 0g from legacy/missing dose data. */
+  doseGramsRecorded?: boolean;
   fragrance: number; // 0-10
   aroma: number; // 0-10
   flavor: number; // 0-10
