@@ -67,7 +67,6 @@ function tastingHref(roast: Roast, days: number): string {
 export function getCoachInsights({ beans, roasts, tastings, today = todayDateString() }: CoachData): CoachInsight[] {
   const insights: CoachInsight[] = [];
   const completed = completedTastings(tastings);
-  const roastIdsWithTasting = new Set(completed.map(tasting => tasting.roastId));
   const newestFirst = [...roasts].sort((a, b) => b.roastDate.localeCompare(a.roastDate) || b.id.localeCompare(a.id));
 
   if (beans.length === 0) {
@@ -91,8 +90,12 @@ export function getCoachInsights({ beans, roasts, tastings, today = todayDateStr
   }
 
   const dueTastings = newestFirst
-    .map(roast => ({ roast, days: Math.max(0, diffDateDays(roast.roastDate, today)) }))
-    .filter(({ roast, days }) => !roastIdsWithTasting.has(roast.id) && (days >= 6 && days <= 11));
+    .map(roast => {
+      const days = Math.max(0, diffDateDays(roast.roastDate, today));
+      const tastedDays = completed.filter(t => t.roastId === roast.id).map(t => t.dayAfterRoast);
+      return { roast, days, tastedDays };
+    })
+    .filter(({ days, tastedDays }) => (days >= 6 && days <= 11) && !tastedDays.some(day => Math.abs(day - days) <= 1));
   const daySeven = dueTastings.find(item => item.days >= 6 && item.days <= 8);
   const dayTen = dueTastings.find(item => item.days >= 9 && item.days <= 11);
   const tastingDue = daySeven || dayTen;
@@ -107,7 +110,7 @@ export function getCoachInsights({ beans, roasts, tastings, today = todayDateStr
       actionLabel: 'テイスティングを記録', actionHref: tastingHref(tastingDue.roast, tastingDue.days), relatedRoastId: tastingDue.roast.id,
     });
   } else {
-    const untasted = newestFirst.find(roast => !roastIdsWithTasting.has(roast.id));
+    const untasted = newestFirst.find(roast => !completed.some(tasting => tasting.roastId === roast.id));
     if (untasted && completed.length === 0) {
       insights.push({
         id: `tasting-first-${untasted.id}`, type: 'tasting', priority: 'high', color: COLORS.tasting,
@@ -221,7 +224,65 @@ export function getCoachInsights({ beans, roasts, tastings, today = todayDateStr
 }
 
 export function getInsightsForRoast(data: CoachData, roastId: string): CoachInsight[] {
-  return getCoachInsights(data).filter(insight => insight.relatedRoastId === roastId);
+  const roast = data.roasts.find(item => item.id === roastId);
+  if (!roast) return [];
+  const history = completedTastings(data.tastings)
+    .filter(tasting => tasting.roastId === roastId)
+    .sort((a, b) => a.dayAfterRoast - b.dayAfterRoast || a.tastingDate.localeCompare(b.tastingDate));
+  if (history.length === 0) return getCoachInsights(data).filter(insight => insight.relatedRoastId === roastId);
+
+  const latest = history[history.length - 1];
+  const previous = history[history.length - 2];
+  const scoreText = latest.score > 0 ? `${formatNumber(latest.score)}点` : 'スコア未入力';
+  const flavorText = latest.flavors.length ? latest.flavors.slice(0, 4).join('、') : 'フレーバー未選択';
+  const noteText = [latest.negatives.join('、'), latest.notes, latest.improvements].filter(Boolean)[0];
+  const observationParts = [`Day${latest.dayAfterRoast}で${scoreText}`, `主な印象は${flavorText}`];
+  if (noteText) observationParts.push(`メモには「${noteText.slice(0, 70)}」とあります`);
+  if (previous) {
+    const delta = Math.round((latest.score - previous.score) * 10) / 10;
+    observationParts.push(`前回Day${previous.dayAfterRoast}からスコアは${delta > 0 ? '+' : ''}${formatNumber(delta)}点`);
+  }
+
+  const metricChanges: string[] = [];
+  if (previous) {
+    const metrics: Array<[string, keyof Pick<Tasting, 'sweetness' | 'acidityQuality' | 'body' | 'aftertaste' | 'cleanCup'>]> = [
+      ['甘さ', 'sweetness'], ['酸質', 'acidityQuality'], ['ボディ', 'body'], ['後味', 'aftertaste'], ['クリーンカップ', 'cleanCup'],
+    ];
+    metrics.forEach(([label, key]) => {
+      const delta = latest[key] - previous[key];
+      if (Math.abs(delta) >= .5) metricChanges.push(`${label}が${delta > 0 ? '上昇' : '低下'}`);
+    });
+  }
+  const roastEvidence = [
+    roast.developmentRatio !== null ? `Dev ${formatNumber(roast.developmentRatio)}%` : '',
+    roast.lossRatio > 0 ? `Loss ${formatNumber(roast.lossRatio)}%` : '',
+    roast.firstCrackTime ? `1st Crack ${roast.firstCrackTime}` : '1st Crack未記録',
+    roast.dropTime ? `Drop ${roast.dropTime}` : '',
+  ].filter(Boolean).join('、');
+  const interpretation = metricChanges.length
+    ? `${metricChanges.slice(0, 3).join('、')}しています。エイジングによる変化の可能性がありますが、${roastEvidence}だけで原因は断定できません。`
+    : `同一バッチ内では大きな指標変化をまだ確認できません。${roastEvidence}を基準に、同じ抽出条件で追う価値があります。`;
+
+  const completedDays = new Set(history.map(tasting => tasting.dayAfterRoast));
+  const targetDay = [5, 7, 10, 14].find(day => day > latest.dayAfterRoast && !completedDays.has(day));
+  const roastAdjustment = latest.negatives.length
+    ? `次回焙煎では「${latest.negatives[0]}」を比較軸にし、序盤〜中盤の熱量か風量のどちらか一つだけを変えてください。`
+    : '次回焙煎では条件を一つだけ変え、今回と同じ評価軸で差を確認してください。';
+  const nextExperiment = `${targetDay ? `Day${targetDay}前後でもう一度味見し、${latest.flavors.slice(0, 2).join('と') || '甘さと後味'}の変化を確認してください。` : 'このバッチの味見は十分に蓄積されています。次の焙煎比較へ進めます。'}${roastAdjustment}`;
+
+  return [{
+    id: `roast-evidence-${roastId}-${latest.id}`,
+    type: 'experiment', priority: 'high', color: latest.impressionColor || COLORS.experiment,
+    title: `${roast.id} の次の仮説`,
+    message: observationParts.join('。') + '。',
+    observation: observationParts.join('。') + '。',
+    interpretation,
+    nextExperiment,
+    reason: `${history.length}回のテイスティングと焙煎記録から算出。`,
+    relatedRoastId: roastId,
+    actionLabel: targetDay ? `Day${targetDay}を記録` : '次の焙煎を始める',
+    actionHref: targetDay ? tastingHref(roast, targetDay) : `/roasts/new?beanId=${roast.beanId}`,
+  }];
 }
 
 export function getLiveRoastCoachInsight(draft: Roast, previousRoasts: Roast[]): CoachInsight {

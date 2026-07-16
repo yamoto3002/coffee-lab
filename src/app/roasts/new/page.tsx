@@ -8,6 +8,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { Bean, Roast, RoastStep } from '@/types';
 import CoachInsightCard from '@/components/CoachInsightCard';
 import SyncStatus from '@/components/SyncStatus';
+import Modal from '@/components/Modal';
 import { getLiveRoastCoachInsight } from '@/lib/coach';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio, DBService, secondsToTime, timeToSeconds } from '@/lib/db';
 import { todayDateString } from '@/lib/date';
@@ -31,14 +32,6 @@ type RoastDraftOverrides = {
 };
 
 const CONTROL_VALUES = [1, 2, 3, 4, 5, 6, 7, 8];
-
-const PHASE_STYLE: Record<Phase, string> = {
-  idle: 'radial-gradient(ellipse at 50% 20%, rgba(208,155,106,0.08), transparent 45%)',
-  drying: 'radial-gradient(ellipse at 50% 20%, rgba(34,197,94,0.12), transparent 50%)',
-  crack: 'radial-gradient(ellipse at 50% 20%, rgba(249,115,22,0.18), transparent 50%)',
-  development: 'radial-gradient(ellipse at 50% 20%, rgba(239,68,68,0.14), transparent 50%)',
-  drop: 'radial-gradient(ellipse at 50% 20%, rgba(208,155,106,0.20), transparent 55%)',
-};
 
 function NewRoastContent() {
   const router = useRouter();
@@ -97,7 +90,6 @@ function NewRoastContent() {
   const currentTime = secondsToTime(elapsedSecs);
   const devTime = firstCrackTime ? calculateDevTime(firstCrackTime, dropTime || currentTime) : null;
   const devRatio = firstCrackTime ? calculateDevRatio(firstCrackTime, dropTime || currentTime) : null;
-  const beanAccent = selectedBean?.themeColor || '#00DFFF';
 
   const loadLocalData = useCallback(() => {
     const allBeans = DBService.getBeans();
@@ -205,7 +197,7 @@ function NewRoastContent() {
 
   const startRoast = () => {
     if (!beanId) {
-      alert('使用する生豆を選択してください。');
+      setSyncError('使用する生豆を選択してから焙煎を開始してください。');
       return;
     }
     if (!hasStarted) {
@@ -319,7 +311,7 @@ function NewRoastContent() {
 
   const saveRoast = async () => {
     if (!beanId) {
-      alert('使用する生豆を選択してください。');
+      setSyncError('使用する生豆を選択してから保存してください。');
       return;
     }
     const finalRoast = buildDraftRoast();
@@ -361,35 +353,35 @@ function NewRoastContent() {
     if (!dropTime) return null;
     return getLiveRoastCoachInsight(buildDraftRoast(), pastRoasts);
   }, [buildDraftRoast, dropTime, pastRoasts]);
+  const syncDisplayError = syncError.includes('GOOGLE_APPS_SCRIPT_URL')
+    ? 'クラウド同期が未設定です。記録はこの端末に保存されます。設定画面で接続先を確認できます。'
+    : syncError;
 
   return (
-    <div className="lab-shell min-h-screen text-[#F4F4F6]" style={{ backgroundImage: `${PHASE_STYLE[phase]}, radial-gradient(circle at 80% 0%, ${beanAccent}22, transparent 36%)` }}>
-      <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-6">
+    <div className="lab-shell min-h-screen text-[var(--foreground)]" data-phase={phase}>
+      <header className="sticky top-0 z-[var(--z-sticky)] flex min-h-[4.5rem] items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-6">
         <div className="flex items-center gap-3">
-          <Link href="/roasts" className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-[#F4F4F6]">
+          <Link href="/roasts" className="tap-button inline-flex h-11 w-11 items-center justify-center rounded-[10px] text-[var(--muted-foreground)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]" aria-label="焙煎記録へ戻る">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-lg font-bold md:text-xl">Live Roast</h1>
-            <p className="text-xs text-[#8E8E93]">{roastId} / local-first recording</p>
+            <h1 className="text-base font-bold md:text-lg">焙煎を記録</h1>
+            <p className="text-xs text-[var(--muted-foreground)]">{roastId} · 端末に記録して後から同期</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden md:block"><SyncStatus message={syncStatus} tone={syncError ? 'error' : hasPendingSync ? 'pending' : 'idle'} onRetry={retryPendingSync} compact /></div>
-          <button onClick={saveRoast} disabled={isSaving} className="tap-button flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14] disabled:cursor-not-allowed disabled:opacity-60" style={{ backgroundColor: beanAccent }}>
-          <Save className="h-4 w-4" />
-          {isSaving ? '保存中' : '保存'}
-        </button>
+          <div className="hidden lg:block"><SyncStatus message={syncStatus} tone={syncError ? 'error' : hasPendingSync ? 'pending' : 'idle'} onRetry={retryPendingSync} compact /></div>
+          {dropTime && <button onClick={saveRoast} disabled={isSaving} className="tap-button flex min-h-11 items-center gap-2 rounded-[10px] bg-[var(--primary)] px-4 py-2 text-sm font-bold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4" />{isSaving ? '保存中' : '結果を保存'}</button>}
         </div>
       </header>
 
-      {syncError && <div className="border-b border-amber-300/15 bg-amber-300/[0.06] px-4 py-2.5 md:px-6"><SyncStatus message={`${syncError} 入力内容はローカルに残っています。`} tone="error" onRetry={retryPendingSync} /></div>}
+      {syncError && !hasStarted && <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 md:px-6"><SyncStatus message={`この端末には保存されます。${syncDisplayError} 通信回復後に自動同期します。`} tone="pending" onRetry={retryPendingSync} /></div>}
 
-      <div className="sticky top-[98px] z-10 grid grid-cols-2 border-b border-white/10 bg-[#080E14]/95 backdrop-blur sm:top-[73px]">
-        <button onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-b-2 text-cyan-100' : 'text-slate-400'}`} style={{ borderColor: tabMode === 'live' ? beanAccent : undefined }}>
-          <Timer className="h-4 w-4" /> Live
+      <div className="sticky top-[4.5rem] z-[var(--z-sticky)] grid grid-cols-2 border-b border-[var(--border)] bg-[var(--background)]" role="tablist" aria-label="記録方法">
+        <button type="button" role="tab" aria-selected={tabMode === 'live'} onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 border-b-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted-foreground)]'}`}>
+          <Timer className="h-4 w-4" /> タイマー
         </button>
-        <button onClick={() => setTabMode('manual')} className={`tap-button flex items-center justify-center gap-2 py-3 text-sm font-semibold ${tabMode === 'manual' ? 'border-b-2 text-cyan-100' : 'text-slate-400'}`} style={{ borderColor: tabMode === 'manual' ? beanAccent : undefined }}>
+        <button type="button" role="tab" aria-selected={tabMode === 'manual'} onClick={() => setTabMode('manual')} className={`tap-button flex items-center justify-center gap-2 border-b-2 py-3 text-sm font-semibold ${tabMode === 'manual' ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted-foreground)]'}`}>
           <Clock className="h-4 w-4" /> 手入力
         </button>
       </div>
@@ -399,49 +391,55 @@ function NewRoastContent() {
           <section className={`roast-batch-panel space-y-4 ${hasStarted ? 'hidden' : ''}`}>
             <Panel title="バッチ設定">
               <label className="space-y-1 block">
-                <span className="text-xs text-[#8E8E93]">使用する生豆</span>
-                <select value={beanId} onChange={event => setBeanId(event.target.value)} className="w-full rounded-xl border bg-[#101827] px-3 py-3 text-sm" style={{ borderColor: `${beanAccent}66` }}>
+                <span className="text-sm font-medium text-[var(--muted-foreground)]">使用する生豆</span>
+                <select value={beanId} onChange={event => setBeanId(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-base">
+                  {beans.length === 0 && <option value="">生豆を先に登録してください</option>}
                   {beans.map(bean => <option key={bean.id} value={bean.id}>[{bean.id}] {bean.country} - {bean.name}</option>)}
                 </select>
+                {beans.length === 0 && <Link href="/beans" className="tap-button inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]">生豆を登録する</Link>}
               </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="space-y-1 block">
-                  <span className="text-xs text-[#8E8E93]">焙煎日</span>
-                  <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-3 text-sm" />
+                  <span className="text-sm font-medium text-[var(--muted-foreground)]">焙煎日</span>
+                  <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-base" />
                 </label>
                 <label className="space-y-1 block">
-                  <span className="text-xs text-[#8E8E93]">投入量(g)</span>
-                  <input type="number" inputMode="decimal" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#101827] px-3 py-3 font-mono text-sm" />
+                  <span className="text-sm font-medium text-[var(--muted-foreground)]">投入量 <span className="font-normal">(g)</span></span>
+                  <input type="number" inputMode="decimal" min="0" step="0.1" value={greenWeightInput} onChange={event => setGreenWeightInput(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 font-mono text-base" />
                 </label>
               </div>
               {selectedBean && (
-                <div className="rounded-xl border bg-[#101827] p-3 text-xs text-slate-300" style={{ borderColor: `${beanAccent}44` }}>
-                  <div className="flex justify-between"><span>想定Loss</span><strong className="font-mono text-[#D09B6A]">{selectedBean.weightLossPercentage}%</strong></div>
-                  <div className="mt-2 flex justify-between border-t border-white/10 pt-2"><span>予想焙煎後重量</span><strong className="font-mono text-lg text-[#F4F4F6]">{predictedRoastedWeight}g</strong></div>
+                <div className="rounded-[10px] bg-[var(--surface)] p-3 text-sm text-[var(--muted-foreground)]">
+                  <div className="flex justify-between"><span>想定減量率</span><strong className="font-mono text-[var(--primary)]">{selectedBean.weightLossPercentage}%</strong></div>
+                  <div className="mt-2 flex justify-between border-t border-[var(--border)] pt-2"><span>予想焙煎後重量</span><strong className="font-mono text-lg text-[var(--foreground)]">{predictedRoastedWeight}<span className="ml-1 text-xs text-[var(--muted-foreground)]">g</span></strong></div>
                 </div>
               )}
+              <div className="grid grid-cols-2 gap-3 lg:hidden">
+                <SelectNumber label="初期火力" value={liveHeat} onChange={setLiveHeat} />
+                <SelectNumber label="初期風量" value={liveAir} onChange={setLiveAir} />
+              </div>
+              <button type="button" onClick={startRoast} disabled={!beanId} className="btn-primary tap-button flex w-full items-center justify-center gap-2 lg:hidden"><Play className="h-4 w-4" />焙煎を開始</button>
             </Panel>
 
           </section>
 
-          <section className="roast-primary-panel space-y-3">
-            <section className="lab-card relative overflow-hidden rounded-3xl p-6 text-center md:p-8" style={{ borderColor: `${beanAccent}40` }}>
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/60 to-transparent" />
-              <div className="flex items-center justify-between text-left"><span className="eyebrow text-slate-500">{hasStarted ? 'Roasting in progress' : 'Ready for charge'}</span><span className="status-pill border-white/10 bg-white/[0.05]" style={{ color: beanAccent }}>{isRunning ? 'LIVE' : hasStarted ? 'PAUSED' : 'SETUP'}</span></div>
-              <div className="timer-display mt-5 font-mono text-7xl font-black tracking-normal text-white sm:text-8xl lg:text-9xl">{currentTime}</div>
-              <p className="mt-3 text-xs text-slate-400">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 大きなマイルストーンをタップ` : '豆・投入量・火力・風量を確認して、実験を始めます。'}</p>
+          <section className={`roast-primary-panel space-y-3 ${!hasStarted ? 'hidden lg:block' : ''}`}>
+            <section className="lab-card relative overflow-hidden rounded-[14px] p-5 text-center md:p-7">
+              <div className="flex items-center justify-between text-left"><span className="text-sm font-medium text-[var(--muted-foreground)]">{hasStarted ? '焙煎中 · 端末に記録中' : '開始前の確認'}</span><span className="status-pill border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)]">{isRunning ? '計測中' : hasStarted ? '一時停止' : '準備中'}</span></div>
+              <div className="timer-display mt-4 font-mono text-6xl font-bold text-[var(--foreground)] sm:text-7xl lg:text-8xl">{currentTime}</div>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 変化が起きたら下のボタンで記録` : beans.length === 0 ? '開始する前に、生豆を登録してください。' : '豆・投入量・火力・風量を確認して開始します。'}</p>
               <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 gap-2">
                 <Stat label="Dev" value={devTime || '不明'} />
                 <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
               </div>
               <div className="mx-auto mt-7 grid max-w-md grid-cols-[1.45fr_1fr] gap-3">
-                <button onClick={isRunning ? pauseRoast : startRoast} disabled={Boolean(dropTime)} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl py-3 font-bold text-[#080E14] shadow-lg disabled:opacity-55" style={{ backgroundColor: beanAccent }}>
-                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{dropTime ? 'COMPLETE' : isRunning ? 'PAUSE' : hasStarted ? 'RESUME' : 'START'}
+                <button onClick={isRunning ? pauseRoast : startRoast} disabled={!beanId || Boolean(dropTime)} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-[10px] bg-[var(--primary)] py-3 font-bold text-[var(--primary-foreground)] disabled:opacity-45">
+                  {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{dropTime ? '計測完了' : isRunning ? '一時停止' : hasStarted ? '計測を再開' : '焙煎を開始'}
                 </button>
-                <button onClick={resetRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] py-3 text-sm font-bold text-[#E4E4E7]"><RotateCcw className="h-4 w-4" /> RESET</button>
+                <button onClick={resetRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-raised)] py-3 text-sm font-bold text-[var(--foreground)]"><RotateCcw className="h-4 w-4" /> リセット</button>
               </div>
               {dropTime && (
-                <button onClick={saveRoast} disabled={isSaving} className="tap-button mt-3 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E8ECEF] px-4 font-bold text-[#090B0D] disabled:opacity-60">
+                <button onClick={saveRoast} disabled={isSaving} className="tap-button mt-3 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-[10px] bg-[var(--primary)] px-4 font-bold text-[var(--primary-foreground)] disabled:opacity-60">
                   <Save className="h-4 w-4" />{isSaving ? '保存中' : '実験結果を保存'}
                 </button>
               )}
@@ -452,13 +450,18 @@ function NewRoastContent() {
               <MilestoneButton label="Drop" time={dropTime} onClick={() => recordMilestone('Drop', 'dropTime')} disabled={!hasStarted || Boolean(dropTime)} color="stone" />
             </div>
 
+            {hasStarted && !dropTime && <div className="live-roast-dock" aria-label="焙煎中の主要操作">
+              <button type="button" onClick={() => recordMilestone('1st Crack', 'firstCrackTime')} disabled={Boolean(firstCrackTime)}><span>1st Crack</span><strong>{firstCrackTime || '記録'}</strong></button>
+              <button type="button" className="is-drop" onClick={() => recordMilestone('Drop', 'dropTime')}><span>焙煎終了</span><strong>Drop</strong></button>
+            </div>}
+
             <Panel title="火力・風量">
               <NumberControl icon={<Flame className="h-4 w-4" />} label="火力" value={liveHeat} onChange={changeHeat} color="orange" />
               <NumberControl icon={<Wind className="h-4 w-4" />} label="風量" value={liveAir} onChange={changeAir} color="blue" />
             </Panel>
 
-            <details className="lab-card-soft rounded-2xl p-4">
-              <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-400">プロファイルを表示</summary>
+            <details className="lab-card-soft rounded-[14px] p-4">
+              <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">プロファイルを表示</summary>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 12, right: 12, left: -20, bottom: 0 }}>
@@ -482,13 +485,13 @@ function NewRoastContent() {
           <section className="roast-secondary-panel space-y-4">
             {dropCoachInsight && <CoachInsightCard insight={{ ...dropCoachInsight, actionHref: undefined, actionLabel: undefined }} featured />}
             {firstCrackTime && !dropTime && (
-              <p className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100">
-                1st Crack後のDevは現在時刻ベースでリアルタイム計算中です。
+              <p className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--accent)]">
+                1st Crack後の Development は、現在時刻から計算しています。
               </p>
             )}
 
-            <details className="lab-card-soft rounded-2xl p-4">
-              <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-400">タイムライン ({timeline.length})</summary>
+            <details className="lab-card-soft rounded-[14px] p-4">
+              <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">タイムライン（{timeline.length}件）</summary>
               <div className="max-h-[440px] space-y-2 overflow-y-auto pr-1">
                 {timeline.map(step => (
                   <TimelineRow key={step.time} step={step} onDelete={() => removeStep(step.time)} />
@@ -497,8 +500,8 @@ function NewRoastContent() {
               </div>
             </details>
 
-            <details className="lab-card-soft rounded-2xl p-4">
-              <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-400">メモ / ゴースト</summary>
+            <details className="lab-card-soft rounded-[14px] p-4">
+              <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">メモと比較プロファイル</summary>
               <div className="mt-4 space-y-3">
               <textarea value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="香り、排気、火の入り方など" className="w-full resize-none rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm" />
               <select value={ghostRoastId} onChange={event => copyGhostProfile(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 text-sm">
@@ -545,11 +548,8 @@ function NewRoastContent() {
           </Panel>
         </main>
       )}
-      {showFirstCrackChoice && (
-        <div className="fixed inset-0 z-[60] flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
-          <div className="w-full max-w-md rounded-2xl border border-[#3A2A1E] bg-[#131315] p-5 shadow-2xl">
-            <h2 className="text-lg font-bold text-[#F4F4F6]">1st Crackが未記録です</h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#A1A1AA]">
+      <Modal isOpen={showFirstCrackChoice} onClose={() => setShowFirstCrackChoice(false)} title="1st Crackが未記録です">
+            <p className="text-sm leading-6 text-[var(--muted-foreground)]">
               Dev%は0ではなく「不明」として扱えます。聞こえなかった場合は、次回メモに香り・煙・色の変化も残すと比較しやすくなります。
             </p>
             <div className="mt-4 space-y-2">
@@ -570,30 +570,28 @@ function NewRoastContent() {
                 戻る
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="lab-card-soft space-y-4 rounded-2xl p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</h2>
+    <section className="lab-card-soft space-y-4 rounded-[14px] p-4">
+      <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
       {children}
     </section>
   );
 }
 
 function NumberControl({ icon, label, value, onChange, color }: { icon: React.ReactNode; label: string; value: number; onChange: (value: number) => void; color: 'orange' | 'blue' }) {
-  const activeClass = color === 'orange' ? 'bg-orange-500 text-white border-orange-300 shadow-orange-500/25' : 'bg-blue-500 text-white border-blue-300 shadow-blue-500/25';
+  const activeClass = color === 'orange' ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]' : 'border-[var(--accent)] bg-[var(--accent)] text-[#10201f]';
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-bold text-[#E4E4E7]">{icon}{label}<span className="font-mono text-[#8E8E93]">{value}</span></div>
       <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-1">
         {CONTROL_VALUES.map(item => (
-          <button key={item} type="button" onClick={() => onChange(item)} className={`tap-button h-11 w-11 shrink-0 rounded-xl border text-sm font-bold ${item === value ? activeClass : 'border-white/10 bg-white/[0.05] text-slate-400 hover:bg-white/[0.08]'}`}>{item}</button>
+          <button key={item} type="button" aria-pressed={item === value} aria-label={`${label} ${item}`} onClick={() => onChange(item)} className={`tap-button h-11 w-11 shrink-0 rounded-[10px] border text-sm font-bold ${item === value ? activeClass : 'border-[var(--border)] bg-[var(--surface-raised)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>{item}</button>
         ))}
       </div>
     </div>
@@ -601,9 +599,9 @@ function NumberControl({ icon, label, value, onChange, color }: { icon: React.Re
 }
 
 function MilestoneButton({ label, time, onClick, disabled, color }: { label: string; time: string; onClick: () => void; disabled: boolean; color: 'orange' | 'red' | 'stone' }) {
-  const colorClass = color === 'orange' ? 'bg-orange-500/15 text-orange-300 border-orange-500/30' : color === 'red' ? 'bg-red-500/15 text-red-300 border-red-500/30' : 'bg-stone-300/10 text-stone-200 border-stone-300/30';
+  const colorClass = color === 'orange' ? 'border-[var(--border)] bg-[var(--surface-raised)] text-[var(--primary)]' : color === 'red' ? 'border-[var(--border)] bg-[var(--surface-raised)] text-[var(--destructive)]' : 'border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)]';
   return (
-    <button disabled={disabled} onClick={onClick} className={`tap-button min-h-[4.75rem] rounded-2xl border p-2 text-center disabled:cursor-not-allowed disabled:opacity-40 ${colorClass}`}>
+    <button disabled={disabled} onClick={onClick} className={`tap-button min-h-[4.75rem] rounded-[10px] border p-2 text-center disabled:cursor-not-allowed disabled:opacity-40 ${colorClass}`}>
       <span className="block text-xs font-bold sm:text-sm">{label}</span>
       <span className="mt-1 block font-mono text-xs opacity-80">{time || '--:--'}</span>
     </button>
@@ -613,8 +611,8 @@ function MilestoneButton({ label, time, onClick, disabled, color }: { label: str
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center">
-      <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-      <strong className="block truncate font-mono text-lg text-cyan-100">{value}</strong>
+      <span className="block text-xs text-[var(--muted-foreground)]">{label}</span>
+      <strong className="block truncate font-mono text-lg text-[var(--foreground)]">{value}</strong>
     </div>
   );
 }

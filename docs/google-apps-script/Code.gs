@@ -58,6 +58,7 @@ const SHEETS = {
       'dayAfterRoast',
       'tastingDay',
       'doseGrams',
+      'doseGramsRecorded',
       'score',
       'fragrance',
       'aroma',
@@ -423,6 +424,9 @@ function normalizeTasting(input) {
     dayAfterRoast: toNumber(firstDefined(input.dayAfterRoast, input.tastingDay)),
     tastingDay: toNumber(firstDefined(input.dayAfterRoast, input.tastingDay)),
     doseGrams: toNumber(input.doseGrams),
+    doseGramsRecorded: input.doseGramsRecorded === undefined
+      ? input.doseGrams !== undefined && input.doseGrams !== null && input.doseGrams !== '' && Number(input.doseGrams) > 0
+      : input.doseGramsRecorded === true || String(input.doseGramsRecorded).toLowerCase() === 'true',
     score: toNumber(input.score),
     fragrance: toNumber(input.fragrance),
     aroma: toNumber(input.aroma),

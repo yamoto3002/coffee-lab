@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Minus, Plus, Save, Star, Trash2 } from 'lucide-react'
 import CoachInsightCard from '@/components/CoachInsightCard';
 import FlavorWheel from '@/components/FlavorWheel';
 import SyncStatus from '@/components/SyncStatus';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { getTastingCoachInsight } from '@/lib/coach';
 import { DBService } from '@/lib/db';
 import { diffDateDays, formatDate, todayDateString } from '@/lib/date';
@@ -18,17 +19,17 @@ const NEGATIVE_OPTIONS = ['Under Developed', 'Over Developed', 'Astringency', 'S
 type ScoreKey = 'fragrance' | 'aroma' | 'flavor' | 'sweetness' | 'acidityIntensity' | 'acidityQuality' | 'body' | 'aftertaste' | 'balance' | 'cleanCup' | 'overall';
 
 const SCORE_FIELDS: { key: ScoreKey; label: string; description: string }[] = [
-  { key: 'fragrance', label: 'Fragrance', description: '粉の香り' },
-  { key: 'aroma', label: 'Aroma', description: '抽出後の香り' },
-  { key: 'flavor', label: 'Flavor', description: '風味' },
-  { key: 'sweetness', label: 'Sweetness', description: '甘さ' },
-  { key: 'acidityIntensity', label: 'Acidity Intensity', description: '酸の強さ' },
-  { key: 'acidityQuality', label: 'Acidity Quality', description: '酸の質' },
-  { key: 'body', label: 'Body', description: '質感' },
-  { key: 'aftertaste', label: 'Aftertaste', description: '余韻' },
-  { key: 'balance', label: 'Balance', description: 'バランス' },
-  { key: 'cleanCup', label: 'Clean Cup', description: '透明感' },
-  { key: 'overall', label: 'Overall', description: '総合評価' },
+  { key: 'fragrance', label: '粉の香り', description: '挽いた直後' },
+  { key: 'aroma', label: '抽出後の香り', description: 'お湯を注いだ後' },
+  { key: 'flavor', label: '風味', description: '口に含んだ印象' },
+  { key: 'sweetness', label: '甘さ', description: '甘さの明瞭さ' },
+  { key: 'acidityIntensity', label: '酸の強さ', description: '強度' },
+  { key: 'acidityQuality', label: '酸の質', description: '心地よさ' },
+  { key: 'body', label: '質感', description: '口当たり' },
+  { key: 'aftertaste', label: '余韻', description: '持続と心地よさ' },
+  { key: 'balance', label: 'バランス', description: '全体の調和' },
+  { key: 'cleanCup', label: '透明感', description: '雑味の少なさ' },
+  { key: 'overall', label: '総合評価', description: 'もう一度飲みたいか' },
 ];
 
 const defaultScores: Record<ScoreKey, number> = {
@@ -68,6 +69,7 @@ export default function TastingPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
   const [savedTasting, setSavedTasting] = useState<Tasting | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState(FLAVOR_CATEGORIES[0].name);
   const [activeSubcategory, setActiveSubcategory] = useState(FLAVOR_CATEGORIES[0].subcategories[0].name);
 
@@ -75,7 +77,6 @@ export default function TastingPage() {
     const timer = window.setTimeout(() => {
       const currentRoast = DBService.getRoastById(id);
       if (!currentRoast) {
-        alert('焙煎記録が見つかりません。');
         router.push('/roasts');
         return;
       }
@@ -122,7 +123,7 @@ export default function TastingPage() {
     return () => window.clearTimeout(timer);
   }, [id, isNew, requestedDay, router]);
 
-  const tastingColor = flavorColor(flavors[0], '#00DFFF');
+  const tastingColor = flavorColor(flavors[0], '#D9A066');
 
   const dayAfterRoast = roast ? Math.max(0, diffDateDays(roast.roastDate, tastingDate)) : 0;
   const liveScore = useMemo(() => scores.fragrance + scores.aroma + scores.flavor + scores.sweetness
@@ -171,6 +172,7 @@ export default function TastingPage() {
       tastingDate,
       dayAfterRoast,
       doseGrams: Number(doseGrams) || 0,
+      doseGramsRecorded: doseGrams.trim() !== '',
       ...scores,
       score: Math.round(liveScore * 10) / 10,
       recommendationRating: rating,
@@ -193,7 +195,6 @@ export default function TastingPage() {
 
   const deleteTasting = () => {
     if (!tastingId || !DBService.getTastingById(tastingId)) return;
-    if (!confirm('このテイスティング記録を削除しますか？')) return;
     DBService.deleteTasting(tastingId, false);
     void DBService.deleteTastingFromCloud(tastingId);
     router.push(`/roasts/${id}`);
@@ -202,28 +203,28 @@ export default function TastingPage() {
   if (!roast) return null;
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col" style={{ backgroundImage: `radial-gradient(circle at 80% 0%, ${tastingColor}22, transparent 36%)` }}>
-      <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur md:flex-row md:items-center md:justify-between md:px-6">
+    <div className="lab-shell flex min-h-screen flex-col">
+      <header className="sticky top-0 z-[var(--z-sticky)] flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
         <div className="flex items-center gap-3">
           <Link href={`/roasts/${id}`} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-wide">テイスティング #{tastingIndex}</h1>
-            <p className="truncate text-xs text-slate-400">{roast.id} / {bean?.name || '生豆不明'} / {formatDate(tastingDate)} / Day {dayAfterRoast}</p>
+            <h1 className="text-xl font-bold">味見の記録 #{tastingIndex}</h1>
+            <p className="truncate text-sm text-slate-400">{roast.id} / {bean?.name || '生豆不明'} / {formatDate(tastingDate)} / 焙煎から{dayAfterRoast}日</p>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 md:justify-end">
           <div className="text-right">
-            <span className="block text-[10px] text-slate-500">合計スコア</span>
-            <span className="font-mono text-2xl font-extrabold" style={{ color: tastingColor }}>{liveScore.toFixed(1)}<span className="ml-1 text-xs font-normal text-slate-500">/100</span></span>
+            <span className="block text-xs text-slate-400">合計スコア</span>
+            <span className="font-mono text-2xl font-extrabold text-[var(--primary)]">{liveScore.toFixed(1)}<span className="ml-1 text-xs font-normal text-slate-400">/100</span></span>
           </div>
           {DBService.getTastingById(tastingId) && (
-            <button onClick={deleteTasting} className="tap-button rounded-lg border border-red-300/20 bg-red-400/10 p-2 text-red-200" aria-label="削除">
+            <button onClick={() => setDeleteDialogOpen(true)} className="tap-button rounded-lg border border-red-300/20 bg-red-400/10 p-2 text-red-200" aria-label="削除">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
-          <button onClick={saveTasting} className="tap-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#080E14]" style={{ backgroundColor: tastingColor }}>
+          <button onClick={saveTasting} className="btn-primary tap-button inline-flex items-center gap-2">
             {savedTasting ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
             {savedTasting ? '保存済み' : '保存'}
           </button>
@@ -234,7 +235,7 @@ export default function TastingPage() {
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:p-6">
         {savedTasting && <section className="lg:col-span-2"><CoachInsightCard insight={{ ...getTastingCoachInsight(roast, savedTasting), actionHref: undefined, actionLabel: undefined }} featured /><div className="mt-3 flex justify-end"><Link href={`/roasts/${id}`} className="btn-secondary tap-button inline-flex items-center gap-2">焙煎詳細へ戻る<ArrowLeft className="h-4 w-4 rotate-180" /></Link></div></section>}
-        <section className="order-2 space-y-6 lg:order-1">
+        <section className="order-1 space-y-6">
           <Panel title="基本情報">
             <div className="grid gap-4 md:grid-cols-3">
               <label className="block space-y-1">
@@ -243,7 +244,7 @@ export default function TastingPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">焙煎から</span>
-                <div className="flex min-h-11 items-center rounded-lg border border-white/10 bg-[#101827] px-3 font-mono text-sm" style={{ color: tastingColor }}>Day {dayAfterRoast}</div>
+                <div className="flex min-h-11 items-center rounded-lg border border-white/10 bg-[#101827] px-3 font-mono text-sm text-[var(--primary)]">{dayAfterRoast}日目</div>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">使用した豆量(g)</span>
@@ -255,13 +256,13 @@ export default function TastingPage() {
           <Panel title="スコア (0-10)">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {SCORE_FIELDS.map(field => (
-                <ScoreControl key={field.key} label={field.label} description={field.description} value={scores[field.key]} onChange={value => updateScore(field.key, value)} accent={tastingColor} />
+                <ScoreControl key={field.key} label={field.label} description={field.description} value={scores[field.key]} onChange={value => updateScore(field.key, value)} accent="var(--primary)" />
               ))}
             </div>
           </Panel>
         </section>
 
-        <section className="order-1 space-y-6 lg:order-2">
+        <section className="order-2 space-y-6">
           <Panel title="フレーバー">
             <FlavorWheel
               activeCategory={activeCategory}
@@ -281,7 +282,7 @@ export default function TastingPage() {
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map(star => (
                 <button key={star} type="button" onClick={() => setRating(star)} className="tap-button p-1" aria-label={`おすすめ度 ${star}`}>
-                  <Star className={`h-8 w-8 ${star <= rating ? 'fill-current' : 'text-slate-700'}`} style={{ color: star <= rating ? tastingColor : undefined }} />
+                  <Star className={`h-8 w-8 ${star <= rating ? 'fill-current text-[var(--primary)]' : 'text-slate-700'}`} />
                 </button>
               ))}
             </div>
@@ -296,8 +297,8 @@ export default function TastingPage() {
           </CollapsiblePanel>
 
           <CollapsiblePanel title="メモ">
-            <textarea value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="抽出方法、湯温、挽き目、味の印象など" className="w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
-            <textarea value={improvements} onChange={event => setImprovements(event.target.value)} rows={3} placeholder="次回の焙煎や抽出で試したいこと" className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+            <textarea aria-label="味見のメモ" value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="抽出方法、湯温、挽き目、味の印象など" className="w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
+            <textarea aria-label="次回試したいこと" value={improvements} onChange={event => setImprovements(event.target.value)} rows={3} placeholder="次回の焙煎や抽出で試したいこと" className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
           </CollapsiblePanel>
 
           <CollapsiblePanel title="写真">
@@ -306,8 +307,8 @@ export default function TastingPage() {
                 {photos.map((src, index) => (
                   <div key={index} className="group relative aspect-square overflow-hidden rounded-lg border border-white/10">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt="tasting" className="h-full w-full object-cover" />
-                    <button type="button" onClick={() => setPhotos(photos.filter((_, itemIndex) => itemIndex !== index))} className="absolute inset-0 flex items-center justify-center bg-[#080E14]/70 text-red-300 opacity-0 transition group-hover:opacity-100">
+                    <img src={src} alt={`味見の記録写真 ${index + 1}`} className="h-full w-full object-cover" />
+                    <button type="button" aria-label={`写真 ${index + 1} を削除`} onClick={() => setPhotos(photos.filter((_, itemIndex) => itemIndex !== index))} className="absolute inset-0 flex items-center justify-center bg-[#080E14]/70 text-red-300 opacity-0 transition focus:opacity-100 group-hover:opacity-100">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -321,6 +322,7 @@ export default function TastingPage() {
           </CollapsiblePanel>
         </section>
       </main>
+      <ConfirmDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={deleteTasting} title="テイスティング記録を削除しますか？" description={`Day${dayAfterRoast}の味見記録を削除します。`} consequence="削除後は予想残量とコーチの仮説が再計算されます。この操作は復元できません。" />
     </div>
   );
 }
@@ -348,16 +350,16 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-sm font-semibold">{label}</span>
-          <span className="block text-[10px] text-slate-500">{description}</span>
+          <span className="block text-xs text-slate-400">{description}</span>
         </div>
-        <input type="number" inputMode="decimal" min="0" max="10" step="0.1" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commitDraft} className="w-20 rounded-lg border border-white/10 bg-[#101827] px-2 py-1 text-right font-mono text-sm" style={{ color: accent }} />
+        <input aria-label={`${label}の数値`} type="number" inputMode="decimal" min="0" max="10" step="0.1" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commitDraft} className="w-20 rounded-lg border border-white/10 bg-[#101827] px-2 py-1 text-right font-mono text-base" style={{ color: accent }} />
       </div>
-      <input type="range" min="0" max="10" step="1" value={Math.round(value)} onChange={event => onChange(Number(event.target.value))} className="w-full" style={{ accentColor: accent }} />
+      <input aria-label={`${label}のスライダー`} type="range" min="0" max="10" step="1" value={Math.round(value)} onChange={event => onChange(Number(event.target.value))} className="w-full" style={{ accentColor: accent }} />
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => onChange(value - 0.1)} className="tap-button inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300">
+        <button type="button" aria-label={`${label}を0.1下げる`} onClick={() => onChange(value - 0.1)} className="tap-button inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300">
           <Minus className="h-3 w-3" />0.1
         </button>
-        <button type="button" onClick={() => onChange(value + 0.1)} className="tap-button inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300">
+        <button type="button" aria-label={`${label}を0.1上げる`} onClick={() => onChange(value + 0.1)} className="tap-button inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300">
           <Plus className="h-3 w-3" />0.1
         </button>
       </div>
@@ -368,7 +370,7 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="lab-card-soft rounded-xl p-5">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h2>
+      <h2 className="mb-3 text-sm font-semibold text-slate-300">{title}</h2>
       {children}
     </section>
   );
@@ -377,7 +379,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 function CollapsiblePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <details className="lab-card-soft rounded-xl p-5">
-      <summary className="tap-button cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</summary>
+      <summary className="tap-button cursor-pointer text-sm font-semibold text-slate-300">{title}</summary>
       <div className="mt-4">{children}</div>
     </details>
   );
@@ -385,7 +387,7 @@ function CollapsiblePanel({ title, children }: { title: string; children: React.
 
 function Tag({ selected, danger = false, onClick, children }: { selected: boolean; danger?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`tap-button flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${selected ? danger ? 'border-red-300/40 bg-red-400/15 text-red-200' : 'border-cyan-300/40 bg-cyan-300/15 text-cyan-100' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>
+    <button type="button" onClick={onClick} aria-pressed={selected} className={`tap-button flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${selected ? danger ? 'border-red-300/40 bg-[color-mix(in_oklab,var(--destructive)_15%,transparent)] text-red-100' : 'border-[color-mix(in_oklab,var(--accent)_40%,transparent)] bg-[color-mix(in_oklab,var(--accent)_15%,transparent)] text-[var(--accent)]' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}>
       {selected && <Check className="h-3 w-3" />}
       {children}
     </button>

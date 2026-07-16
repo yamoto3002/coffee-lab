@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, ChevronRight, Flame, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
+import { Calendar, ChevronRight, Flame, RefreshCw, Search, Star } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import SyncStatus from '@/components/SyncStatus';
-import { DBService, getAgingDays } from '@/lib/db';
+import RoastTape from '@/components/RoastTape';
+import { DBService, getAgingDays, getRoastBatchBalance } from '@/lib/db';
 import { formatDate } from '@/lib/date';
 import { Bean, Roast, Tasting } from '@/types';
 
@@ -68,29 +69,23 @@ export default function RoastsPage() {
     return [...filtered].sort((a, b) => sortBy === 'id-asc' ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id));
   }, [roasts, beans, searchQuery, tastingFilter, beanFilter, sortBy, tastings]);
 
-  const deleteRoast = (roast: Roast) => {
-    if (!confirm(`焙煎記録 ${roast.id} を削除しますか？紐づくテイスティングも削除されます。`)) return;
-    DBService.deleteRoast(roast.id, false);
-    loadLocal();
-    setSyncMessage('ローカルで削除しました。Google Sheetsへ同期中です。');
-    void DBService.deleteRoastFromCloud(roast.id).then(result => {
-      setSyncMessage(result.ok ? 'Google Sheetsから削除済み' : result.error || 'Google Sheetsとの同期に失敗しました。バックグラウンドで再試行します。');
-    });
-  };
+  const displaySyncMessage = syncMessage.includes('GOOGLE_APPS_SCRIPT_URL')
+    ? 'クラウド同期が未設定です。端末への記録は利用できます。'
+    : syncMessage;
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:px-6">
+      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div>
-          <h1 className="text-xl font-bold tracking-wide">焙煎記録</h1>
-          <p className="text-xs text-slate-400">ID順で追えるシンプルな焙煎ログ</p>
+          <h1 className="page-title">焙煎記録</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">時間・火力・味見を、ひとつの実験として追跡します。</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <SyncStatus message={syncMessage} tone={syncMessage.includes('失敗') ? 'error' : syncMessage.includes('同期中') ? 'syncing' : 'idle'} compact />
-          <button onClick={syncFromCloud} className="tap-button rounded-xl bg-white/[0.06] p-2 text-slate-300 hover:text-white" aria-label="再同期">
+          <SyncStatus message={displaySyncMessage} tone={syncMessage.includes('失敗') || syncMessage.includes('GOOGLE_APPS_SCRIPT_URL') ? 'error' : syncMessage.includes('同期中') ? 'syncing' : 'idle'} compact />
+          <button onClick={syncFromCloud} className="tap-button rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-2 text-slate-200" aria-label="再同期">
             <RefreshCw className="h-4 w-4" />
           </button>
-          <Link href="/roasts/new" className="tap-button flex items-center gap-1.5 rounded-xl bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">
+          <Link href="/roasts/new" className="btn-primary tap-button flex items-center gap-1.5">
             <Flame className="h-4 w-4" />
             新規焙煎
           </Link>
@@ -100,12 +95,12 @@ export default function RoastsPage() {
       <div className="flex flex-col gap-3 border-b border-white/10 bg-white/[0.025] p-4 md:flex-row md:items-center md:justify-between">
         <div className="relative w-full md:w-80">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-          <input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="ID、生豆名、国で検索" className="w-full rounded-xl border border-white/10 bg-[#101827] py-2 pl-9 pr-4 text-sm text-[#F4F4F6]" />
+          <input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="ID、生豆名、国で検索" className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-4 text-base text-[var(--foreground)]" />
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:flex md:flex-wrap">
           <select value={tastingFilter} onChange={event => setTastingFilter(event.target.value as TastingFilter)} className="rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-xs text-slate-200">
             <option value="all">すべて</option>
-            <option value="tasted">tasting済み</option>
+            <option value="tasted">味見済み</option>
           </select>
           <select value={beanFilter} onChange={event => setBeanFilter(event.target.value)} className="rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-xs text-slate-200 md:max-w-[220px]">
             <option value="all">すべての生豆</option>
@@ -120,30 +115,29 @@ export default function RoastsPage() {
 
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-4 pb-24 md:p-6">
         {sortedRoasts.length === 0 ? (
-          <EmptyState title="まだ焙煎記録がありません" message="最初の実験を保存すると、ここにプロファイル・テイスティング・比較の流れが育ちます。" actionLabel="Live Roastを開始" actionHref="/roasts/new" />
+          <EmptyState title="まだ焙煎記録がありません" message="最初の実験を保存すると、プロファイル・味見・比較がここにつながります。" actionLabel="最初の焙煎を記録" actionHref="/roasts/new" />
         ) : (
           sortedRoasts.map(roast => {
             const bean = beanFor(roast.beanId);
             const score = maxScore(roast.id);
             const rating = maxRating(roast.id);
             const tasted = isTasted(roast.id);
-            const color = bean?.themeColor || '#00DFFF';
+            const color = bean?.themeColor || '#D9A066';
+            const roastTastings = tastings.filter(tasting => tasting.roastId === roast.id);
+            const balance = getRoastBatchBalance(roast, roastTastings, bean);
             return (
               <div key={roast.id} className="tap-button lab-card relative overflow-hidden rounded-xl" style={{ borderColor: `${color}33` }}>
-                <button type="button" onClick={() => deleteRoast(roast)} className="absolute right-3 top-3 z-10 rounded-lg bg-[#080E14]/80 p-2 text-slate-400 transition hover:text-red-300 active:scale-90" aria-label="焙煎記録を削除">
-                  <Trash2 className="h-4 w-4" />
-                </button>
                 <Link href={`/roasts/${roast.id}`} className="grid gap-0 sm:grid-cols-[140px_1fr_170px_44px]">
                   <div className="flex flex-row items-center justify-between gap-3 border-b border-white/10 px-4 py-4 sm:flex-col sm:justify-center sm:border-b-0 sm:border-r sm:py-5">
                     <div className="text-left sm:text-center">
                       <span className="font-mono text-xl font-bold" style={{ color }}>{roast.id}</span>
-                      <span className="mt-1 block rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">{getAgingDays(roast.roastDate)}日目</span>
+                      <span className="mt-1 block rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-xs text-slate-300">{getAgingDays(roast.roastDate)}日目</span>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${tasted ? 'bg-emerald-400/10 text-emerald-200' : 'bg-white/[0.06] text-slate-400'}`}>
-                      {tasted ? 'tasting済み' : '未tasting'}
+                    <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${tasted ? 'border-emerald-300/30 bg-[color-mix(in_oklab,var(--success)_12%,transparent)] text-emerald-100' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}>
+                      {tasted ? '味見済み' : '未味見'}
                     </span>
                   </div>
-                  <div className="space-y-3 p-4 pr-12 sm:p-5">
+                  <div className="space-y-3 p-4 sm:p-5">
                     <div>
                       <div className="mb-1 flex items-center gap-2 text-xs text-slate-400">
                         <Calendar className="h-3.5 w-3.5" />
@@ -157,6 +151,7 @@ export default function RoastsPage() {
                       <Mini label="Drop" value={roast.dropTime || '不明'} accent />
                       <div className="hidden sm:block"><Mini label="Dev" value={roast.developmentRatio === null ? '不明' : `${roast.developmentRatio}%`} /></div>
                     </div>
+                    <RoastTape roast={roast} tastings={roastTastings} bean={bean} compact />
                   </div>
                   <div className="flex items-center justify-between border-t border-white/10 p-4 sm:flex-col sm:items-start sm:justify-center sm:border-l sm:border-t-0">
                     {score > 0 ? (
@@ -165,6 +160,7 @@ export default function RoastsPage() {
                         <div className="mt-1 flex" style={{ color }}>{Array.from({ length: rating }).map((_, index) => <Star key={index} className="h-3 w-3 fill-current" />)}</div>
                       </div>
                     ) : <span className="text-xs text-slate-500">スコアなし</span>}
+                    <span className="mt-2 block text-xs text-[var(--muted-foreground)]">残り <strong className="font-mono text-[var(--foreground)]">{balance.remainingGrams.toFixed(1)}g</strong></span>
                   </div>
                   <div className="hidden items-center justify-center border-l border-white/10 sm:flex">
                     <ChevronRight className="h-5 w-5 text-slate-500" />
@@ -182,8 +178,8 @@ export default function RoastsPage() {
 function Mini({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="min-w-0 rounded-lg bg-white/[0.05] p-2">
-      <span className="block text-[10px] text-slate-500">{label}</span>
-      <span className={`block truncate font-bold ${accent ? 'text-cyan-100' : 'text-[#F4F4F6]'}`}>{value}</span>
+      <span className="block text-xs text-slate-400">{label}</span>
+      <span className={`block truncate font-bold ${accent ? 'text-[var(--primary)]' : 'text-[var(--foreground)]'}`}>{value}</span>
     </div>
   );
 }

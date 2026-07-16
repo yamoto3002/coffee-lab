@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,19 +13,43 @@ interface ModalProps {
 
 export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const reduceMotion = useReducedMotion();
 
   // Close on Escape key
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     if (isOpen) {
+      restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
+      window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     }
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
+      restoreFocusRef.current?.focus();
     };
   }, [isOpen, onClose]);
 
@@ -36,7 +60,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -44,7 +68,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             exit={{ opacity: 0 }}
             ref={overlayRef}
             onClick={handleOverlayClick}
-            className="fixed inset-0 bg-[#0B0B0C]/85 backdrop-blur-sm"
+            className="fixed inset-0 z-[var(--z-modal-backdrop)] bg-black/75"
           />
 
           {/* Modal Container */}
@@ -52,15 +76,20 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="relative w-full max-w-lg md:max-w-2xl rounded-xl border border-[#232326] bg-[#131315] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+            transition={{ duration: reduceMotion ? 0.01 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            className="relative z-[var(--z-modal)] flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface-raised)] shadow-[0_4px_8px_rgba(0,0,0,.28)] md:max-w-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#232326] bg-[#0E0E10]">
-              <h2 className="text-base font-semibold text-[#F4F4F6] tracking-wide">{title}</h2>
+            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-5 py-4 md:px-6">
+              <h2 id={titleId} className="text-base font-semibold text-[var(--foreground)]">{title}</h2>
               <button
+                ref={closeButtonRef}
                 onClick={onClose}
-                className="p-1 rounded-md text-[#8E8E93] hover:text-[#F4F4F6] hover:bg-[#1E1E22] transition-colors"
+                className="tap-button inline-flex h-11 w-11 items-center justify-center rounded-[10px] text-[var(--muted-foreground)] hover:bg-[var(--surface-raised)] hover:text-[var(--foreground)]"
                 aria-label="閉じる"
               >
                 <X className="w-5 h-5" />
@@ -68,7 +97,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
               {children}
             </div>
           </motion.div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Edit2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { DBService } from '@/lib/db';
 import { formatDate, todayDateString } from '@/lib/date';
 import { Bean, Roast } from '@/types';
@@ -82,7 +83,7 @@ const emptyForm = (): BeanFormValues => ({
   purchasePrice: '',
   initialWeight: '250',
   weightLossPercentage: '15',
-  themeColor: '#00DFFF',
+  themeColor: '#D9A066',
   notes: '',
 });
 
@@ -106,6 +107,8 @@ export default function BeansPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBean, setEditingBean] = useState<Bean | null>(null);
   const [form, setForm] = useState<BeanFormValues>(emptyForm());
+  const [formError, setFormError] = useState('');
+  const [pendingDeleteBean, setPendingDeleteBean] = useState<Bean | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'pending' | 'error'>('synced');
   const [syncMessage, setSyncMessage] = useState('ローカル準備完了');
   const [pendingCount, setPendingCount] = useState(() => DBService.getPendingSyncCount());
@@ -191,6 +194,7 @@ export default function BeansPage() {
   };
 
   const updateForm = (key: keyof BeanFormValues, value: string) => {
+    setFormError('');
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -198,7 +202,7 @@ export default function BeansPage() {
     event.preventDefault();
     const initialWeight = numberValue(form.initialWeight);
     if (!form.name.trim() || !form.country.trim() || !form.purchaseDate || initialWeight <= 0) {
-      alert('生豆名、国、購入日、購入量を入力してください。');
+      setFormError('生豆名、国、購入日、購入量を確認してください。購入量は0より大きい値を入力します。');
       return;
     }
 
@@ -248,7 +252,6 @@ export default function BeansPage() {
   };
 
   const deleteBean = (bean: Bean) => {
-    if (!confirm(`${bean.name} を削除しますか？焙煎履歴は残ります。`)) return;
     DBService.deleteBean(bean.id, false);
     loadLocalData();
     setSyncStatus('syncing');
@@ -263,21 +266,22 @@ export default function BeansPage() {
         setSyncMessage(result.error || 'Google Sheetsとの同期に失敗しました。バックグラウンドで再試行します。');
       }
     });
+    setPendingDeleteBean(null);
   };
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-white/10 bg-[#080E14]/95 px-4 py-4 backdrop-blur md:flex-row md:items-center md:justify-between md:px-6">
+      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
         <div>
-          <h1 className="text-xl font-bold tracking-wide">生豆管理</h1>
-          <p className="text-xs text-slate-400">生豆と残量をシンプルに記録</p>
+          <h1 className="page-title">生豆台帳</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">産地情報と購入量を、焙煎記録の基準として残します。</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SyncPill status={syncStatus} message={syncMessage} pendingCount={pendingCount} />
-          <button type="button" onClick={syncFromCloud} className="tap-button rounded-xl bg-white/[0.06] p-2 text-slate-300 hover:text-white" aria-label="再同期">
+          <button type="button" onClick={syncFromCloud} className="tap-button rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-2 text-slate-200" aria-label="再同期">
             <RefreshCw className="h-4 w-4" />
           </button>
-          <button type="button" onClick={openAddModal} className="tap-button flex items-center gap-1.5 rounded-xl bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">
+          <button type="button" onClick={openAddModal} className="btn-primary tap-button flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
             追加
           </button>
@@ -285,8 +289,8 @@ export default function BeansPage() {
       </header>
 
       <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(300px,38%)_1fr]">
-        <section className="border-r border-white/10 bg-[#080E14]">
-          <div className="border-b border-white/10 p-4">
+        <section className="border-r border-[var(--border)] bg-[var(--background)]">
+          <div className="border-b border-[var(--border)] p-4">
             <div className="relative">
               <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
               <input
@@ -294,7 +298,7 @@ export default function BeansPage() {
                 placeholder="生豆名、国、精製方法で検索"
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#101827] py-2.5 pl-9 pr-4 text-sm text-[#F4F4F6] placeholder:text-slate-500"
+                className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-4 text-base text-[var(--foreground)] placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -302,13 +306,14 @@ export default function BeansPage() {
           <div className="max-h-[calc(100vh-154px)] overflow-y-auto divide-y divide-white/10">
             {filteredBeans.map(bean => {
               const selected = bean.id === selectedBeanId;
-              const color = bean.themeColor || '#00DFFF';
+              const color = bean.themeColor || '#D9A066';
               return (
-                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} style={{ borderLeftColor: color }} className={`tap-button block w-full border-l-4 p-4 text-left ${selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.035]'}`}>
+                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} className={`tap-button block w-full p-4 text-left ${selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.035]'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">{bean.id}</span>
+                        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs text-slate-300">{bean.id}</span>
                         <span className="truncate text-xs text-slate-400">{flagForCountry(bean.country)} {bean.country}</span>
                       </div>
                       <h2 className="mt-1 truncate text-sm font-semibold text-[#F4F4F6]">{bean.name}</h2>
@@ -319,7 +324,13 @@ export default function BeansPage() {
                 </button>
               );
             })}
-            {filteredBeans.length === 0 && <div className="p-10 text-center text-sm text-slate-500">生豆がありません。</div>}
+            {filteredBeans.length === 0 && (
+              <div className="p-8 text-center">
+                <p className="font-semibold text-[var(--foreground)]">{beans.length === 0 ? '最初の生豆を登録しましょう' : '条件に合う生豆がありません'}</p>
+                <p className="mt-2 text-sm text-[var(--muted-foreground)]">{beans.length === 0 ? '生豆は焙煎記録と味見をつなぐ基準になります。' : '検索語を短くして、もう一度お試しください。'}</p>
+                {beans.length === 0 && <button type="button" onClick={openAddModal} className="btn-secondary mt-5">生豆を登録</button>}
+              </div>
+            )}
           </div>
         </section>
 
@@ -329,16 +340,23 @@ export default function BeansPage() {
               bean={selectedBean}
               roasts={selectedBeanRoasts}
               onEdit={() => openEditModal(selectedBean)}
-              onDelete={() => deleteBean(selectedBean)}
+              onDelete={() => setPendingDeleteBean(selectedBean)}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">生豆を選択してください</div>
+            <div className="flex min-h-72 h-full items-center justify-center p-6 text-center">
+              <div className="max-w-sm">
+                <p className="text-lg font-semibold text-[var(--foreground)]">{beans.length === 0 ? '焙煎の前に、生豆をひとつ登録' : '左の一覧から生豆を選択'}</p>
+                <p className="mt-2 text-sm text-[var(--muted-foreground)]">購入時の量は基準値として保存され、焙煎しても自動では減りません。</p>
+                {beans.length === 0 && <button type="button" onClick={openAddModal} className="btn-primary mt-5">最初の生豆を登録</button>}
+              </div>
+            </div>
           )}
         </section>
       </main>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingBean ? '生豆を編集' : '生豆を追加'}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {formError && <p role="alert" aria-live="assertive" className="rounded-[10px] border border-[color-mix(in_oklab,var(--status-error)_35%,var(--border-subtle))] bg-[color-mix(in_oklab,var(--status-error)_10%,transparent)] p-3 text-sm text-[var(--status-error)]">{formError}</p>}
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="生豆名" required value={form.name} onChange={value => updateForm('name', value)} placeholder="Chelbesa G1" />
             <Field label="生産国" required value={form.country} onChange={value => updateForm('country', value)} placeholder="Ethiopia" />
@@ -378,6 +396,7 @@ export default function BeansPage() {
           </div>
         </form>
       </Modal>
+      <ConfirmDialog open={Boolean(pendingDeleteBean)} onClose={() => setPendingDeleteBean(null)} onConfirm={() => pendingDeleteBean && deleteBean(pendingDeleteBean)} title="生豆記録を削除しますか？" description={`${pendingDeleteBean?.name || ''} の生豆記録を削除します。`} consequence="焙煎履歴は残ります。この生豆の基本情報は削除後に復元できません。" />
     </div>
   );
 }
@@ -432,8 +451,8 @@ function BeanDetail({ bean, roasts, onEdit, onDelete }: { bean: Bean; roasts: Ro
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">この豆の焙煎履歴</h3>
-          <Link href={`/roasts/new?beanId=${bean.id}`} className="tap-button rounded-full bg-cyan-300 px-3 py-1.5 text-sm font-bold text-[#080E14]">焙煎する</Link>
+          <h3 className="text-sm font-semibold text-slate-300">この豆の焙煎履歴</h3>
+          <Link href={`/roasts/new?beanId=${bean.id}`} className="btn-primary tap-button">この豆を焙煎</Link>
         </div>
         {roasts.map(roast => (
           <Link key={roast.id} href={`/roasts/${roast.id}`} className="tap-button flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
@@ -463,8 +482,8 @@ function SyncPill({ status, message, pendingCount }: { status: 'synced' | 'synci
       : status === 'pending' ? 'text-amber-200 bg-amber-400/10 border-amber-300/20'
         : 'text-red-200 bg-red-400/10 border-red-300/20';
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs ${color}`}>
-      {message}{pendingCount > 0 ? ` / 未同期 ${pendingCount}` : ''}
+    <span className={`max-w-full rounded-[10px] border px-3 py-1.5 text-xs ${color}`} role="status">
+      {(message.includes('GOOGLE_APPS_SCRIPT_URL') ? 'クラウド同期が未設定です。端末への記録は利用できます。' : message)}{pendingCount > 0 ? ` / 未同期 ${pendingCount}` : ''}
     </span>
   );
 }
