@@ -37,8 +37,8 @@ export default function ReportPage() {
 
   return (
     <div className="lab-shell min-h-screen print:bg-white print:text-black">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#080b14]/88 px-5 py-4 backdrop-blur-xl print:hidden md:px-8">
-        <Link href="/settings" className="tap-button flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-cyan-100">
+      <header className="page-header sticky top-0 z-10 flex items-center justify-between px-5 py-4 print:hidden md:px-8">
+        <Link href="/settings" className="tap-button flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--foreground)]">
           <ArrowLeft className="h-4 w-4" />
           設定へ戻る
         </Link>
@@ -50,8 +50,8 @@ export default function ReportPage() {
 
       <main className="mx-auto max-w-5xl space-y-8 px-5 py-9 pb-28 print:px-0 md:px-8">
         <section className="space-y-3">
-          <p className="eyebrow text-cyan-200 print:text-slate-600">Coffee Lab Report</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-.04em] text-white print:text-black">焙煎記録レポート</h1>
+          <p className="eyebrow text-[var(--primary)] print:text-slate-600">Coffee Lab Report</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-.03em] text-[var(--foreground)] print:text-black">焙煎記録レポート</h1>
           <p className="mt-2 text-sm text-slate-400 print:text-slate-600">出力日: {formatDate(todayDateString())}</p>
         </section>
 

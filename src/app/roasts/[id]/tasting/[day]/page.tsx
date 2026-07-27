@@ -69,6 +69,7 @@ export default function TastingPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
   const [savedTasting, setSavedTasting] = useState<Tasting | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState(FLAVOR_CATEGORIES[0].name);
   const [activeSubcategory, setActiveSubcategory] = useState(FLAVOR_CATEGORIES[0].subcategories[0].name);
@@ -119,6 +120,8 @@ export default function TastingPage() {
         setNotes(existing.notes || '');
         setPhotos(existing.photos || []);
       }
+      setSavedTasting(existing || null);
+      setIsDirty(false);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [id, isNew, requestedDay, router]);
@@ -131,14 +134,17 @@ export default function TastingPage() {
     + scores.body + scores.aftertaste + scores.balance + scores.cleanCup + scores.overall, [scores]);
 
   const updateScore = (key: ScoreKey, value: number) => {
+    setIsDirty(true);
     setScores(current => ({ ...current, [key]: Math.round(Math.min(10, Math.max(0, value)) * 10) / 10 }));
   };
 
   const toggleNegative = (value: string) => {
+    setIsDirty(true);
     setNegatives(list => list.includes(value) ? list.filter(item => item !== value) : [...list, value]);
   };
 
   const toggleFlavor = (label: string) => {
+    setIsDirty(true);
     setFlavors(list => {
       if (list.includes(label)) return list.filter(item => item !== label);
       if (list.length >= 6) return list;
@@ -147,6 +153,7 @@ export default function TastingPage() {
   };
 
   const removeFlavor = (label: string) => {
+    setIsDirty(true);
     setFlavors(list => list.filter(item => item !== label));
   };
 
@@ -156,7 +163,10 @@ export default function TastingPage() {
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        if (typeof reader.result === 'string') setPhotos(current => [...current, reader.result as string]);
+        if (typeof reader.result === 'string') {
+          setPhotos(current => [...current, reader.result as string]);
+          setIsDirty(true);
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -190,6 +200,7 @@ export default function TastingPage() {
     setSyncMessage('ローカル保存済み。Google Sheetsはバックグラウンドで同期します。');
     void DBService.saveTastingToCloud(tasting);
     setSavedTasting(tasting);
+    setIsDirty(false);
     router.replace(`/roasts/${id}/tasting/${dayAfterRoast}`);
   };
 
@@ -204,7 +215,7 @@ export default function TastingPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="sticky top-0 z-[var(--z-sticky)] flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+      <header className="page-header sticky top-0 z-[var(--z-sticky)] flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
         <div className="flex items-center gap-3">
           <Link href={`/roasts/${id}`} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white">
             <ArrowLeft className="h-5 w-5" />
@@ -225,8 +236,8 @@ export default function TastingPage() {
             </button>
           )}
           <button onClick={saveTasting} className="btn-primary tap-button inline-flex items-center gap-2">
-            {savedTasting ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {savedTasting ? '保存済み' : '保存'}
+            {savedTasting && !isDirty ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            {savedTasting && !isDirty ? '保存済み' : '保存'}
           </button>
         </div>
       </header>
@@ -240,7 +251,7 @@ export default function TastingPage() {
             <div className="grid gap-4 md:grid-cols-3">
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">テイスティング日</span>
-                <input type="date" value={tastingDate} onChange={event => setTastingDate(event.target.value)} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+                <input type="date" value={tastingDate} onChange={event => { setTastingDate(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">焙煎から</span>
@@ -248,7 +259,7 @@ export default function TastingPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">使用した豆量(g)</span>
-                <input type="number" inputMode="decimal" value={doseGrams} onChange={event => setDoseGrams(event.target.value)} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+                <input type="number" inputMode="decimal" value={doseGrams} onChange={event => { setDoseGrams(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
               </label>
             </div>
           </Panel>
@@ -281,7 +292,7 @@ export default function TastingPage() {
           <Panel title="おすすめ度">
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map(star => (
-                <button key={star} type="button" onClick={() => setRating(star)} className="tap-button p-1" aria-label={`おすすめ度 ${star}`}>
+                <button key={star} type="button" onClick={() => { setRating(star); setIsDirty(true); }} className="tap-button p-1" aria-label={`おすすめ度 ${star}`}>
                   <Star className={`h-8 w-8 ${star <= rating ? 'fill-current text-[var(--primary)]' : 'text-slate-700'}`} />
                 </button>
               ))}
@@ -297,8 +308,8 @@ export default function TastingPage() {
           </CollapsiblePanel>
 
           <CollapsiblePanel title="メモ">
-            <textarea aria-label="味見のメモ" value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="抽出方法、湯温、挽き目、味の印象など" className="w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
-            <textarea aria-label="次回試したいこと" value={improvements} onChange={event => setImprovements(event.target.value)} rows={3} placeholder="次回の焙煎や抽出で試したいこと" className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
+            <textarea aria-label="味見のメモ" value={notes} onChange={event => { setNotes(event.target.value); setIsDirty(true); }} rows={3} placeholder="抽出方法、湯温、挽き目、味の印象など" className="w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
+            <textarea aria-label="次回試したいこと" value={improvements} onChange={event => { setImprovements(event.target.value); setIsDirty(true); }} rows={3} placeholder="次回の焙煎や抽出で試したいこと" className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
           </CollapsiblePanel>
 
           <CollapsiblePanel title="写真">
@@ -308,7 +319,7 @@ export default function TastingPage() {
                   <div key={index} className="group relative aspect-square overflow-hidden rounded-lg border border-white/10">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={src} alt={`味見の記録写真 ${index + 1}`} className="h-full w-full object-cover" />
-                    <button type="button" aria-label={`写真 ${index + 1} を削除`} onClick={() => setPhotos(photos.filter((_, itemIndex) => itemIndex !== index))} className="absolute inset-0 flex items-center justify-center bg-[#080E14]/70 text-red-300 opacity-0 transition focus:opacity-100 group-hover:opacity-100">
+                    <button type="button" aria-label={`写真 ${index + 1} を削除`} onClick={() => { setPhotos(photos.filter((_, itemIndex) => itemIndex !== index)); setIsDirty(true); }} className="absolute inset-0 flex items-center justify-center bg-[#080E14]/70 text-red-300 opacity-0 transition focus:opacity-100 group-hover:opacity-100">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -346,7 +357,7 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.035] p-3.5">
+    <div className="space-y-3 border-t border-[var(--border)] py-4 first:border-t-0">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-sm font-semibold">{label}</span>
@@ -369,8 +380,8 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="lab-card-soft rounded-xl p-5">
-      <h2 className="mb-3 text-sm font-semibold text-slate-300">{title}</h2>
+    <section className="instrument-panel">
+      <h2 className="mb-3 text-sm font-semibold text-[var(--text-secondary)]">{title}</h2>
       {children}
     </section>
   );
@@ -378,8 +389,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function CollapsiblePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="lab-card-soft rounded-xl p-5">
-      <summary className="tap-button cursor-pointer text-sm font-semibold text-slate-300">{title}</summary>
+    <details className="instrument-panel">
+      <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--text-secondary)]">{title}</summary>
       <div className="mt-4">{children}</div>
     </details>
   );

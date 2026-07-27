@@ -119,7 +119,7 @@ export default function RoastDetailPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="sticky top-0 z-[var(--z-sticky)] flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+      <header className="page-header sticky top-0 z-[var(--z-sticky)] flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div className="flex items-center gap-3">
           <Link href="/roasts" className="tap-button rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white">
             <ArrowLeft className="h-5 w-5" />
@@ -136,7 +136,7 @@ export default function RoastDetailPage() {
           <button onClick={syncFromCloud} className="tap-button rounded-xl bg-white/[0.06] p-2 text-slate-300 hover:text-white" aria-label="再同期">
             <RefreshCw className="h-4 w-4" />
           </button>
-          <button onClick={handleDelete} className="tap-button flex items-center gap-1.5 rounded-xl border border-red-300/20 bg-red-400/10 px-3.5 py-2.5 text-xs font-semibold text-red-200">
+          <button onClick={handleDelete} className="btn-danger tap-button flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold">
             <Trash2 className="h-3.5 w-3.5" />
             削除
           </button>
@@ -292,8 +292,8 @@ export default function RoastDetailPage() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="lab-card-soft rounded-2xl p-5">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-300">
+    <section className="instrument-panel">
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
         <Clock className="h-3.5 w-3.5 text-[var(--accent)]" />
         {title}
       </h2>
@@ -304,8 +304,8 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function CollapsiblePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="lab-card-soft rounded-2xl p-5">
-      <summary className="tap-button cursor-pointer text-sm font-semibold text-slate-300">{title}</summary>
+    <details className="instrument-panel">
+      <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--text-secondary)]">{title}</summary>
       <div className="mt-4">{children}</div>
     </details>
   );
@@ -313,7 +313,7 @@ function CollapsiblePanel({ title, children }: { title: string; children: React.
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-xl bg-white/[0.05] p-3 text-center">
+    <div className="min-w-0 border-l border-[var(--border)] p-3 text-center first:border-l-0">
       <span className="block text-xs text-slate-400">{label}</span>
       <strong className="block truncate font-mono text-lg">{value}</strong>
     </div>
