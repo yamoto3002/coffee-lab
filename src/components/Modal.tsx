@@ -60,7 +60,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center md:items-center md:p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -73,15 +73,15 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
 
           {/* Modal Container */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.98, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            exit={{ opacity: 0, scale: 0.98, y: 24 }}
             transition={{ duration: reduceMotion ? 0.01 : 0.2, ease: [0.22, 1, 0.36, 1] }}
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="relative z-[var(--z-modal)] flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface-raised)] shadow-[0_4px_8px_rgba(0,0,0,.28)] md:max-w-2xl"
+            className="relative z-[var(--z-modal)] flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[14px] border border-[var(--border)] bg-[var(--surface-raised)] pb-[env(safe-area-inset-bottom,0px)] shadow-[0_4px_8px_rgba(0,0,0,.28)] md:max-h-[90vh] md:max-w-2xl md:rounded-[14px] md:pb-0"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-5 py-4 md:px-6">

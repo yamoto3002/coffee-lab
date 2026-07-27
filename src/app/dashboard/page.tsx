@@ -58,12 +58,12 @@ export default function DashboardPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-5 py-5 md:flex-row md:items-center md:justify-between md:px-8">
+      <header className="page-header flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-8 md:py-7">
         <div><h1 className="page-title">分析と次の仮説</h1><p className="mt-2 text-sm text-slate-400">数字を眺めるより先に、次に試すことを決める場所です。</p></div>
         <SyncStatus message={syncMessage} tone={syncTone} onRetry={() => void syncFromCloud()} compact />
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 space-y-8 p-5 pb-28 md:p-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 space-y-9 p-5 pb-28 md:p-8">
         <section>
           <div className="mb-4 flex items-end justify-between gap-4"><h2 className="text-xl font-semibold text-[var(--foreground)]">記録から見えたこと</h2><span className="text-xs text-slate-400">端末内の実データから算出</span></div>
           <div className="max-w-4xl">
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         <section>
           <div className="mb-4"><h2 className="text-xl font-semibold text-[var(--foreground)]">次のアクション</h2></div>
           <div className="border-y border-[var(--border)] py-5">
-            <Link href={tastingInsight?.actionHref || `/roasts/${latestRoast.id}/tasting/1`} className="tap-button flex items-center justify-between gap-4 rounded-[10px] bg-[var(--primary)] px-5 py-4 font-bold text-[var(--primary-foreground)]">
+            <Link href={tastingInsight?.actionHref || `/roasts/${latestRoast.id}/tasting/1`} className="tap-button roast-actuator flex min-h-14 items-center justify-between gap-4 px-5 py-4 font-bold">
               <span className="flex items-center gap-3"><TestTube2 className="h-5 w-5" /><span>味見を記録して仮説を進める</span></span><ChevronRight className="h-5 w-5" />
             </Link>
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -85,10 +85,10 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <div className="lab-card-soft p-5 md:p-6"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold text-[var(--foreground)]">次の味見予定</h2><CalendarDays className="h-5 w-5 text-[var(--accent)]" /></div><div className="md:hidden"><UpcomingList days={calendar.days} /></div><div className="hidden md:block"><CalendarGrid monthLabel={calendar.monthLabel} days={calendar.days} /></div></div>
+          <div className="instrument-panel md:px-6"><div className="flex items-center justify-between gap-3"><h2 className="section-heading">次の味見予定</h2><CalendarDays className="h-5 w-5 text-[var(--accent)]" /></div><div className="md:hidden"><UpcomingList days={calendar.days} /></div><div className="hidden md:block"><CalendarGrid monthLabel={calendar.monthLabel} days={calendar.days} /></div></div>
         </section>
 
-        {canShowTrend && <section className="lab-card-soft p-5 md:p-6"><div className="mb-5"><h2 className="text-lg font-semibold text-[var(--foreground)]">Loss / Dev% の推移</h2><p className="mt-1 text-xs text-slate-400">直近の記録が3件以上あるときだけ表示します。</p></div><div className="h-64 md:h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="id" stroke="var(--muted-foreground)" fontSize={12} /><YAxis stroke="var(--muted-foreground)" fontSize={12} /><Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--foreground)' }} /><Line type="monotone" dataKey="loss" name="Loss (%)" stroke="var(--primary)" strokeWidth={2.5} connectNulls /><Line type="monotone" dataKey="dev" name="Dev (%)" stroke="var(--accent)" strokeWidth={2.5} connectNulls /></LineChart></ResponsiveContainer></div></section>}
+        {canShowTrend && <section className="instrument-panel md:px-6"><div className="mb-5"><h2 className="section-heading">Loss / Dev% の推移</h2><p className="mt-1 text-xs text-[var(--muted-foreground)]">直近10件の変化。条件の違いと一緒に読み取ります。</p></div><div className="h-64 md:h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="id" stroke="var(--muted-foreground)" fontSize={12} /><YAxis stroke="var(--muted-foreground)" fontSize={12} /><Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--foreground)' }} /><Line type="monotone" dataKey="loss" name="Loss (%)" stroke="var(--primary)" strokeWidth={2.5} connectNulls /><Line type="monotone" dataKey="dev" name="Dev (%)" stroke="var(--accent)" strokeWidth={2.5} connectNulls /></LineChart></ResponsiveContainer></div></section>}
       </main>
     </div>
   );

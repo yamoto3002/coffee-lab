@@ -75,7 +75,7 @@ export default function RoastsPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+      <header className="page-header flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div>
           <h1 className="page-title">焙煎記録</h1>
           <p className="text-sm text-[var(--muted-foreground)]">時間・火力・味見を、ひとつの実験として追跡します。</p>
@@ -92,28 +92,28 @@ export default function RoastsPage() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-3 border-b border-white/10 bg-white/[0.025] p-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_40%,transparent)] p-4 md:flex-row md:items-center md:justify-between">
         <div className="relative w-full md:w-80">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-          <input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="ID、生豆名、国で検索" className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-4 text-base text-[var(--foreground)]" />
+          <input aria-label="焙煎記録を検索" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="ID、生豆名、国で検索" className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-4 text-base text-[var(--foreground)]" />
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:flex md:flex-wrap">
-          <select value={tastingFilter} onChange={event => setTastingFilter(event.target.value as TastingFilter)} className="rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-xs text-slate-200">
+          <select aria-label="味見状態で絞り込み" value={tastingFilter} onChange={event => setTastingFilter(event.target.value as TastingFilter)} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]">
             <option value="all">すべて</option>
             <option value="tasted">味見済み</option>
           </select>
-          <select value={beanFilter} onChange={event => setBeanFilter(event.target.value)} className="rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-xs text-slate-200 md:max-w-[220px]">
+          <select aria-label="生豆で絞り込み" value={beanFilter} onChange={event => setBeanFilter(event.target.value)} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] md:max-w-[220px]">
             <option value="all">すべての生豆</option>
             {beans.map(bean => <option key={bean.id} value={bean.id}>[{bean.id}] {bean.name}</option>)}
           </select>
-          <select value={sortBy} onChange={event => setSortBy(event.target.value as SortMode)} className="rounded-xl border border-white/10 bg-[#101827] px-3 py-2 text-xs text-slate-200">
+          <select aria-label="焙煎記録の並び順" value={sortBy} onChange={event => setSortBy(event.target.value as SortMode)} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]">
             <option value="id-desc">ID降順 R0005 → R0001</option>
             <option value="id-asc">ID昇順 R0001 → R0005</option>
           </select>
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-4 pb-24 md:p-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 p-4 pb-24 md:p-6">
         {sortedRoasts.length === 0 ? (
           <EmptyState title="まだ焙煎記録がありません" message="最初の実験を保存すると、プロファイル・味見・比較がここにつながります。" actionLabel="最初の焙煎を記録" actionHref="/roasts/new" />
         ) : (
@@ -126,7 +126,7 @@ export default function RoastsPage() {
             const roastTastings = tastings.filter(tasting => tasting.roastId === roast.id);
             const balance = getRoastBatchBalance(roast, roastTastings, bean);
             return (
-              <div key={roast.id} className="tap-button lab-card relative overflow-hidden rounded-xl" style={{ borderColor: `${color}33` }}>
+              <div key={roast.id} className="tap-button roast-ledger-row relative">
                 <Link href={`/roasts/${roast.id}`} className="grid gap-0 sm:grid-cols-[140px_1fr_170px_44px]">
                   <div className="flex flex-row items-center justify-between gap-3 border-b border-white/10 px-4 py-4 sm:flex-col sm:justify-center sm:border-b-0 sm:border-r sm:py-5">
                     <div className="text-left sm:text-center">
@@ -143,7 +143,7 @@ export default function RoastsPage() {
                         <Calendar className="h-3.5 w-3.5" />
                         <span className="font-mono">{formatDate(roast.roastDate)}</span>
                       </div>
-                      <h2 className="break-words font-bold text-[#F4F4F6]">{bean ? `[${bean.country}] ${bean.name}` : 'Unknown Bean'}</h2>
+                      <h2 className="break-words font-bold text-[var(--foreground)]">{bean ? `[${bean.country}] ${bean.name}` : '生豆不明'}</h2>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs font-mono text-slate-300 sm:grid-cols-4">
                       <Mini label="1st" value={roast.firstCrackTime || '不明'} accent />
@@ -177,7 +177,7 @@ export default function RoastsPage() {
 
 function Mini({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="min-w-0 rounded-lg bg-white/[0.05] p-2">
+    <div className="roast-mini min-w-0 px-2 py-1">
       <span className="block text-xs text-slate-400">{label}</span>
       <span className={`block truncate font-bold ${accent ? 'text-[var(--primary)]' : 'text-[var(--foreground)]'}`}>{value}</span>
     </div>

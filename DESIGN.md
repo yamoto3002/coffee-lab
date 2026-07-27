@@ -2,18 +2,18 @@
 name: Coffee Lab
 description: A calm instrument bench for roast, tasting, and learning records.
 colors:
-  canvas: "#0C0E0E"
-  surface: "#131716"
-  surface-raised: "#1A201E"
-  border: "#303734"
-  ink: "#F2F3EE"
-  ink-muted: "#AEB6AE"
-  copper: "#D9A066"
+  canvas: "#090C0B"
+  surface: "#121714"
+  surface-raised: "#1C241F"
+  border: "#303833"
+  ink: "#F4F0E7"
+  ink-muted: "#A8B1A9"
+  copper: "#E4A45E"
   copper-ink: "#1B120A"
-  info: "#70C8C3"
-  success: "#70C99C"
-  warning: "#E1B966"
-  danger: "#E17A73"
+  info: "#72C8BE"
+  success: "#73C89A"
+  warning: "#E5BC67"
+  danger: "#E77D70"
 typography:
   headline:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Hiragino Sans, Yu Gothic UI, sans-serif"
@@ -44,7 +44,7 @@ typography:
 rounded:
   sm: "6px"
   md: "10px"
-  lg: "14px"
+  lg: "12px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -89,6 +89,7 @@ The system explicitly rejects marketing hero composition, generic AI/SaaS card d
 - Flat-by-default surfaces, 1px structural dividers, and scarce elevation.
 - One obvious primary action per task region.
 - Explicit state language for local, offline, pending, synced, and failed states.
+- A tactile **Roast Actuator** marks only the action that starts or resumes a roast; it compresses immediately on press and never decorates passive content.
 
 ## Colors
 
@@ -168,7 +169,9 @@ The system is flat by default. Depth is conveyed through tonal contrast and stru
 
 ### Navigation
 
-- **Style, typography, default/hover/active states, mobile treatment.** Desktop uses a quiet persistent rail. Mobile uses five evenly distributed destinations with labels and a reachable primary roast action integrated without obscuring content. Active state uses weight, icon, and a restrained copper marker—not glow or a side stripe.
+- **Desktop:** a quiet persistent rail with five direct destinations and one clear new-roast actuator.
+- **Mobile:** five dock positions—Home, Beans, the raised Roast Actuator, Roasts, and More. More contains lower-frequency Analysis and Settings destinations with full labels and descriptions.
+- Active state uses weight, icon, and a restrained copper marker—not glow or a side stripe.
 
 ### Roast Timeline
 

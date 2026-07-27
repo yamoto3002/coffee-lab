@@ -72,6 +72,7 @@ function NewRoastContent() {
   const [newMemo, setNewMemo] = useState('');
   const [ghostRoastId, setGhostRoastId] = useState('');
   const [ghostSteps, setGhostSteps] = useState<TimelineEntry[]>([]);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const intervalRef = useRef<number | null>(null);
   const latestDraftRef = useRef<Roast | null>(null);
@@ -353,10 +354,6 @@ function NewRoastContent() {
     if (!dropTime) return null;
     return getLiveRoastCoachInsight(buildDraftRoast(), pastRoasts);
   }, [buildDraftRoast, dropTime, pastRoasts]);
-  const syncDisplayError = syncError.includes('GOOGLE_APPS_SCRIPT_URL')
-    ? 'クラウド同期が未設定です。記録はこの端末に保存されます。設定画面で接続先を確認できます。'
-    : syncError;
-
   return (
     <div className="lab-shell min-h-screen text-[var(--foreground)]" data-phase={phase}>
       <header className="sticky top-0 z-[var(--z-sticky)] flex min-h-[4.5rem] items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-6">
@@ -375,7 +372,15 @@ function NewRoastContent() {
         </div>
       </header>
 
-      {syncError && !hasStarted && <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 md:px-6"><SyncStatus message={`この端末には保存されます。${syncDisplayError} 通信回復後に自動同期します。`} tone="pending" onRetry={retryPendingSync} /></div>}
+      {!hasStarted && (
+        <div className="min-h-12 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 md:px-6">
+          <SyncStatus
+            message={syncError ? 'この端末に保存します。通信回復後に自動同期します。' : syncStatus}
+            tone={syncError || hasPendingSync ? 'pending' : 'idle'}
+            onRetry={syncError || hasPendingSync ? retryPendingSync : undefined}
+          />
+        </div>
+      )}
 
       <div className="sticky top-[4.5rem] z-[var(--z-sticky)] grid grid-cols-2 border-b border-[var(--border)] bg-[var(--background)]" role="tablist" aria-label="記録方法">
         <button type="button" role="tab" aria-selected={tabMode === 'live'} onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 border-b-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted-foreground)]'}`}>
@@ -389,7 +394,7 @@ function NewRoastContent() {
       {tabMode === 'live' ? (
         <main className={`roast-control-grid gap-4 p-3 sm:p-4 lg:p-6 ${hasStarted ? 'is-active' : ''}`}>
           <section className={`roast-batch-panel space-y-4 ${hasStarted ? 'hidden' : ''}`}>
-            <Panel title="バッチ設定">
+            <Panel title="バッチ設定" compact>
               <label className="space-y-1 block">
                 <span className="text-sm font-medium text-[var(--muted-foreground)]">使用する生豆</span>
                 <select value={beanId} onChange={event => setBeanId(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-base">
@@ -418,22 +423,22 @@ function NewRoastContent() {
                 <SelectNumber label="初期火力" value={liveHeat} onChange={setLiveHeat} />
                 <SelectNumber label="初期風量" value={liveAir} onChange={setLiveAir} />
               </div>
-              <button type="button" onClick={startRoast} disabled={!beanId} className="btn-primary tap-button flex w-full items-center justify-center gap-2 lg:hidden"><Play className="h-4 w-4" />焙煎を開始</button>
+              <button type="button" onClick={startRoast} disabled={!beanId} className="roast-actuator tap-button flex min-h-14 w-full items-center justify-center gap-2 px-4 font-bold lg:hidden"><Play className="h-5 w-5" />焙煎を開始</button>
             </Panel>
 
           </section>
 
           <section className={`roast-primary-panel space-y-3 ${!hasStarted ? 'hidden lg:block' : ''}`}>
-            <section className="lab-card relative overflow-hidden rounded-[14px] p-5 text-center md:p-7">
-              <div className="flex items-center justify-between text-left"><span className="text-sm font-medium text-[var(--muted-foreground)]">{hasStarted ? '焙煎中 · 端末に記録中' : '開始前の確認'}</span><span className="status-pill border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)]">{isRunning ? '計測中' : hasStarted ? '一時停止' : '準備中'}</span></div>
-              <div className="timer-display mt-4 font-mono text-6xl font-bold text-[var(--foreground)] sm:text-7xl lg:text-8xl">{currentTime}</div>
+            <section className="lab-card roast-instrument relative overflow-hidden rounded-[12px] p-5 text-center md:p-7">
+              <div className="flex items-center justify-between text-left"><span className="text-sm font-medium text-[var(--muted-foreground)]">{dropTime ? '計測完了 · 保存待ち' : hasStarted ? '焙煎中 · 端末に記録中' : '開始前の確認'}</span><span className="status-pill border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)]">{dropTime ? '完了' : isRunning ? '計測中' : hasStarted ? '一時停止' : '準備中'}</span></div>
+              <div className="timer-display mt-5 font-mono text-[4.25rem] font-bold text-[var(--foreground)] sm:text-7xl lg:text-8xl">{currentTime}</div>
               <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 変化が起きたら下のボタンで記録` : beans.length === 0 ? '開始する前に、生豆を登録してください。' : '豆・投入量・火力・風量を確認して開始します。'}</p>
-              <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 gap-2">
+              <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 border-y border-[var(--border)]">
                 <Stat label="Dev" value={devTime || '不明'} />
                 <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
               </div>
               <div className="mx-auto mt-7 grid max-w-md grid-cols-[1.45fr_1fr] gap-3">
-                <button onClick={isRunning ? pauseRoast : startRoast} disabled={!beanId || Boolean(dropTime)} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-[10px] bg-[var(--primary)] py-3 font-bold text-[var(--primary-foreground)] disabled:opacity-45">
+                <button onClick={isRunning ? pauseRoast : startRoast} disabled={!beanId || Boolean(dropTime)} className="tap-button roast-actuator flex min-h-16 items-center justify-center gap-2 px-4 py-3 font-bold disabled:opacity-45">
                   {isRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{dropTime ? '計測完了' : isRunning ? '一時停止' : hasStarted ? '計測を再開' : '焙煎を開始'}
                 </button>
                 <button onClick={resetRoast} className="tap-button flex min-h-16 items-center justify-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-raised)] py-3 text-sm font-bold text-[var(--foreground)]"><RotateCcw className="h-4 w-4" /> リセット</button>
@@ -460,25 +465,25 @@ function NewRoastContent() {
               <NumberControl icon={<Wind className="h-4 w-4" />} label="風量" value={liveAir} onChange={changeAir} color="blue" />
             </Panel>
 
-            <details className="lab-card-soft rounded-[14px] p-4">
+            <details className="lab-card-soft rounded-[12px] p-4" onToggle={event => setIsProfileOpen(event.currentTarget.open)}>
               <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">プロファイルを表示</summary>
-              <div className="h-72">
+              {isProfileOpen && <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 12, right: 12, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#232326" />
-                    <XAxis dataKey="secs" type="number" domain={[0, 'dataMax + 60']} tickFormatter={value => secondsToTime(Number(value))} stroke="#8E8E93" fontSize={10} />
-                    <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="#8E8E93" fontSize={10} />
-                    <Tooltip contentStyle={{ background: '#131315', borderColor: '#232326', color: '#F4F4F6' }} labelFormatter={value => secondsToTime(Number(value))} />
-                    <Line type="monotone" dataKey="heat" name="火力" stroke="#F97316" strokeWidth={2.5} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="air" name="風量" stroke="#3B82F6" strokeWidth={2.5} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="ghostHeat" name="Ghost Heat" stroke="#F97316" strokeOpacity={0.3} strokeDasharray="5 5" dot={false} connectNulls />
-                    <Line type="monotone" dataKey="ghostAir" name="Ghost Air" stroke="#3B82F6" strokeOpacity={0.3} strokeDasharray="5 5" dot={false} connectNulls />
-                    {firstCrackTime && <ReferenceLine x={timeToSeconds(firstCrackTime)} stroke="#F97316" strokeDasharray="4 4" label={{ value: '1st', fill: '#F97316', fontSize: 10 }} />}
-                    {secondCrackTime && <ReferenceLine x={timeToSeconds(secondCrackTime)} stroke="#EF4444" strokeDasharray="4 4" label={{ value: '2nd', fill: '#EF4444', fontSize: 10 }} />}
-                    {dropTime && <ReferenceLine x={timeToSeconds(dropTime)} stroke="#F4F4F6" strokeDasharray="4 4" label={{ value: 'Drop', fill: '#F4F4F6', fontSize: 10 }} />}
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="secs" type="number" domain={[0, 'dataMax + 60']} tickFormatter={value => secondsToTime(Number(value))} stroke="var(--muted-foreground)" fontSize={10} />
+                    <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="var(--muted-foreground)" fontSize={10} />
+                    <Tooltip contentStyle={{ background: 'var(--surface-raised)', borderColor: 'var(--border)', color: 'var(--foreground)' }} labelFormatter={value => secondsToTime(Number(value))} />
+                    <Line type="monotone" dataKey="heat" name="火力" stroke="var(--primary)" strokeWidth={2.5} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="air" name="風量" stroke="var(--accent)" strokeWidth={2.5} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="ghostHeat" name="Ghost Heat" stroke="var(--primary)" strokeOpacity={0.3} strokeDasharray="5 5" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="ghostAir" name="Ghost Air" stroke="var(--accent)" strokeOpacity={0.3} strokeDasharray="5 5" dot={false} connectNulls />
+                    {firstCrackTime && <ReferenceLine x={timeToSeconds(firstCrackTime)} stroke="var(--phase-crack)" strokeDasharray="4 4" label={{ value: '1st', fill: 'var(--phase-crack)', fontSize: 10 }} />}
+                    {secondCrackTime && <ReferenceLine x={timeToSeconds(secondCrackTime)} stroke="var(--phase-development)" strokeDasharray="4 4" label={{ value: '2nd', fill: 'var(--phase-development)', fontSize: 10 }} />}
+                    {dropTime && <ReferenceLine x={timeToSeconds(dropTime)} stroke="var(--foreground)" strokeDasharray="4 4" label={{ value: 'Drop', fill: 'var(--foreground)', fontSize: 10 }} />}
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </div>}
             </details>
           </section>
 
@@ -490,7 +495,7 @@ function NewRoastContent() {
               </p>
             )}
 
-            <details className="lab-card-soft rounded-[14px] p-4">
+            <details className="lab-card-soft rounded-[12px] p-4">
               <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">タイムライン（{timeline.length}件）</summary>
               <div className="max-h-[440px] space-y-2 overflow-y-auto pr-1">
                 {timeline.map(step => (
@@ -500,11 +505,11 @@ function NewRoastContent() {
               </div>
             </details>
 
-            <details className="lab-card-soft rounded-[14px] p-4">
+            <details className="lab-card-soft rounded-[12px] p-4">
               <summary className="tap-button cursor-pointer text-sm font-semibold text-[var(--muted-foreground)]">メモと比較プロファイル</summary>
               <div className="mt-4 space-y-3">
-              <textarea value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="香り、排気、火の入り方など" className="w-full resize-none rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm" />
-              <select value={ghostRoastId} onChange={event => copyGhostProfile(event.target.value)} className="w-full rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-3 text-sm">
+              <textarea aria-label="焙煎メモ" value={notes} onChange={event => setNotes(event.target.value)} rows={3} placeholder="香り、排気、火の入り方など" className="w-full resize-none rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm" />
+              <select aria-label="比較する過去プロファイル" value={ghostRoastId} onChange={event => copyGhostProfile(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-sm">
                 <option value="">過去プロファイルを重ねない</option>
                 {pastRoasts.map(roast => <option key={roast.id} value={roast.id}>{roast.id} ({roast.roastDate})</option>)}
               </select>
@@ -521,8 +526,8 @@ function NewRoastContent() {
               <SelectNumber label="風量" value={newAir} onChange={setNewAir} />
             </div>
             <div className="flex gap-2">
-              <input value={newMemo} onChange={event => setNewMemo(event.target.value)} placeholder="メモ" className="flex-1 rounded-xl border border-[#232326] bg-[#1A1A1E] px-3 py-2 text-sm" />
-              <button onClick={addManualStep} className="rounded-xl bg-[#D09B6A] px-4 py-2 font-bold text-[#0B0B0C]">追加</button>
+              <input aria-label="タイムラインのメモ" value={newMemo} onChange={event => setNewMemo(event.target.value)} placeholder="メモ" className="flex-1 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm" />
+              <button onClick={addManualStep} className="btn-primary tap-button px-4 py-2">追加</button>
             </div>
             <div className="space-y-2">
               {timeline.map(step => <TimelineRow key={step.time} step={step} onDelete={() => removeStep(step.time)} />)}
@@ -575,9 +580,9 @@ function NewRoastContent() {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children, compact = false }: { title: string; children: React.ReactNode; compact?: boolean }) {
   return (
-    <section className="lab-card-soft space-y-4 rounded-[14px] p-4">
+    <section className={`instrument-panel ${compact ? 'space-y-3 py-3' : 'space-y-4'}`}>
       <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
       {children}
     </section>
@@ -610,7 +615,7 @@ function MilestoneButton({ label, time, onClick, disabled, color }: { label: str
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center">
+    <div className="roast-stat">
       <span className="block text-xs text-[var(--muted-foreground)]">{label}</span>
       <strong className="block truncate font-mono text-lg text-[var(--foreground)]">{value}</strong>
     </div>

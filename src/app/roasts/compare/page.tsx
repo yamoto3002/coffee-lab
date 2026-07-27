@@ -58,17 +58,17 @@ function CompareContent() {
     });
   }, [roasts, stepsByRoast]);
 
-  const colors = ['#00DFFF', '#FB3D71', '#FF8A3D'];
+  const colors = ['var(--primary)', 'var(--accent)', 'var(--flavor-floral)'];
   const beanName = (beanId: string) => {
     const bean = beans.find(item => item.id === beanId);
-    return bean ? `[${bean.country}] ${bean.name}` : 'Unknown Bean';
+    return bean ? `[${bean.country}] ${bean.name}` : '生豆不明';
   };
 
   if (roasts.length === 0) return null;
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-white/10 bg-[#080E14]/95 px-6 py-4 backdrop-blur">
+      <header className="page-header flex items-center gap-3 px-4 py-4 md:px-6">
         <Link href="/roasts" className="tap-button rounded-lg p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white">
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -79,16 +79,16 @@ function CompareContent() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 pb-28 md:p-6">
-        <section className="lab-card-soft rounded-xl p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[#F4F4F6]">火力と風量の重ね合わせ</h2>
+        <section className="instrument-panel md:px-6">
+          <h2 className="mb-4 text-sm font-semibold text-[var(--foreground)]">火力と風量の重ね合わせ</h2>
           <div className="h-[360px]">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
-                  <XAxis dataKey="secs" type="number" domain={[0, 'dataMax + 30']} tickFormatter={value => secondsToTime(Number(value))} stroke="#94A3B8" fontSize={11} />
-                  <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="#94A3B8" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#243149', color: '#F4F4F6' }} labelFormatter={value => secondsToTime(Number(value))} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="secs" type="number" domain={[0, 'dataMax + 30']} tickFormatter={value => secondsToTime(Number(value))} stroke="var(--muted-foreground)" fontSize={11} />
+                  <YAxis domain={[0, 8]} ticks={[0, 2, 4, 6, 8]} stroke="var(--muted-foreground)" fontSize={11} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface-raised)', borderColor: 'var(--border)', color: 'var(--foreground)' }} labelFormatter={value => secondsToTime(Number(value))} />
                   <Legend />
                   {roasts.map((roast, index) => (
                     <Line key={`heat-${roast.id}`} type="stepAfter" dataKey={`heat_${roast.id}`} name={`${roast.id} 火力`} stroke={colors[index % colors.length]} strokeWidth={2.4} dot={false} />
@@ -107,7 +107,7 @@ function CompareContent() {
             const tastings = tastingsByRoast[roast.id] || [];
             const topTasting = [...tastings].sort((a, b) => b.score - a.score)[0];
             return (
-              <Link key={roast.id} href={`/roasts/${roast.id}`} className="tap-button lab-card-soft rounded-xl p-5" style={{ borderColor: `${colors[index % colors.length]}44` }}>
+              <Link key={roast.id} href={`/roasts/${roast.id}`} className="tap-button lab-card-soft rounded-[12px] p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="font-mono text-xl font-bold" style={{ color: colors[index % colors.length] }}>{roast.id}</h2>
@@ -115,7 +115,7 @@ function CompareContent() {
                   </div>
                   {topTasting && <strong className="font-mono text-2xl" style={{ color: topTasting.impressionColor }}>{topTasting.score}</strong>}
                 </div>
-                <p className="mt-3 text-sm font-semibold text-[#F4F4F6]">{beanName(roast.beanId)}</p>
+                <p className="mt-3 text-sm font-semibold text-[var(--foreground)]">{beanName(roast.beanId)}</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <Row label="投入 / 焙煎後" value={`${roast.greenWeight}g / ${roast.roastedWeight}g`} />
                   <Row label="Loss" value={`${roast.lossRatio}%`} />
@@ -147,7 +147,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-slate-500">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-[var(--muted-foreground)]">比較データを読み込み中…</div>}>
       <CompareContent />
     </Suspense>
   );

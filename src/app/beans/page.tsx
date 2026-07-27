@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Edit2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
@@ -100,9 +100,9 @@ function flagForCountry(country: string) {
 }
 
 export default function BeansPage() {
-  const [beans, setBeans] = useState<Bean[]>(() => DBService.getBeans());
-  const [roasts, setRoasts] = useState<Roast[]>(() => DBService.getRoasts());
-  const [selectedBeanId, setSelectedBeanId] = useState<string | null>(() => DBService.getBeans()[0]?.id ?? null);
+  const [beans, setBeans] = useState<Bean[]>([]);
+  const [roasts, setRoasts] = useState<Roast[]>([]);
+  const [selectedBeanId, setSelectedBeanId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBean, setEditingBean] = useState<Bean | null>(null);
@@ -111,7 +111,8 @@ export default function BeansPage() {
   const [pendingDeleteBean, setPendingDeleteBean] = useState<Bean | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'pending' | 'error'>('synced');
   const [syncMessage, setSyncMessage] = useState('ローカル準備完了');
-  const [pendingCount, setPendingCount] = useState(() => DBService.getPendingSyncCount());
+  const [pendingCount, setPendingCount] = useState(0);
+  const detailRef = useRef<HTMLElement>(null);
 
   const loadLocalData = useCallback(() => {
     const allBeans = DBService.getBeans();
@@ -139,15 +140,17 @@ export default function BeansPage() {
   }, [loadLocalData]);
 
   useEffect(() => {
+    const loadTimer = window.setTimeout(loadLocalData, 0);
     const initialTimer = window.setTimeout(() => void syncFromCloud(), 0);
     const timer = window.setInterval(() => void syncFromCloud(), 60000);
     window.addEventListener('online', syncFromCloud);
     return () => {
+      window.clearTimeout(loadTimer);
       window.clearTimeout(initialTimer);
       window.clearInterval(timer);
       window.removeEventListener('online', syncFromCloud);
     };
-  }, [syncFromCloud]);
+  }, [loadLocalData, syncFromCloud]);
 
   const selectedBean = beans.find(bean => bean.id === selectedBeanId) ?? null;
   const selectedBeanRoasts = roasts.filter(roast => roast.beanId === selectedBeanId);
@@ -167,6 +170,13 @@ export default function BeansPage() {
     setEditingBean(null);
     setForm(emptyForm());
     setIsModalOpen(true);
+  };
+
+  const selectBean = (beanId: string) => {
+    setSelectedBeanId(beanId);
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      window.requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
   };
 
   const openEditModal = (bean: Bean) => {
@@ -271,7 +281,7 @@ export default function BeansPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+      <header className="page-header flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-6">
         <div>
           <h1 className="page-title">生豆台帳</h1>
           <p className="text-sm text-[var(--muted-foreground)]">産地情報と購入量を、焙煎記録の基準として残します。</p>
@@ -295,6 +305,7 @@ export default function BeansPage() {
               <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
               <input
                 type="text"
+                aria-label="生豆を検索"
                 placeholder="生豆名、国、精製方法で検索"
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
@@ -303,12 +314,13 @@ export default function BeansPage() {
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-154px)] overflow-y-auto divide-y divide-white/10">
+          <div className="max-h-[44vh] divide-y divide-[var(--border)] overflow-y-auto md:max-h-[calc(100vh-154px)]">
             {filteredBeans.map(bean => {
               const selected = bean.id === selectedBeanId;
               const color = bean.themeColor || '#D9A066';
+              const stockIsLow = bean.currentWeight <= Math.max(50, bean.initialWeight * 0.15);
               return (
-                <button key={bean.id} type="button" onClick={() => setSelectedBeanId(bean.id)} className={`tap-button block w-full p-4 text-left ${selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.035]'}`}>
+                <button key={bean.id} type="button" aria-pressed={selected} onClick={() => selectBean(bean.id)} className={`tap-button block w-full p-4 text-left ${selected ? 'bg-[var(--surface-raised)]' : 'hover:bg-white/[0.035]'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -319,7 +331,7 @@ export default function BeansPage() {
                       <h2 className="mt-1 truncate text-sm font-semibold text-[#F4F4F6]">{bean.name}</h2>
                       <p className="mt-1 truncate text-xs text-slate-500">{bean.process || '-'} / {bean.region || '-'}</p>
                     </div>
-                    <span className="shrink-0 rounded-md px-2 py-1 font-mono text-xs font-bold" style={{ backgroundColor: `${color}18`, color }}>{bean.currentWeight}g</span>
+                    <span className={`shrink-0 rounded-md bg-[var(--surface)] px-2 py-1 font-mono text-xs font-bold ${stockIsLow ? 'text-[var(--warning)]' : 'text-[var(--text-secondary)]'}`}>{bean.currentWeight}g</span>
                   </div>
                 </button>
               );
@@ -334,7 +346,7 @@ export default function BeansPage() {
           </div>
         </section>
 
-        <section className="overflow-y-auto p-4 md:p-6">
+        <section ref={detailRef} className="scroll-mt-4 overflow-y-auto p-4 md:p-6">
           {selectedBean ? (
             <BeanDetail
               bean={selectedBean}
@@ -392,7 +404,7 @@ export default function BeansPage() {
 
           <div className="flex justify-end gap-3 border-t border-white/10 pt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="tap-button rounded-lg bg-white/[0.06] px-4 py-2 text-sm text-slate-200">キャンセル</button>
-            <button type="submit" className="tap-button rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-[#080E14]">保存</button>
+            <button type="submit" className="btn-primary tap-button px-4 py-2">保存</button>
           </div>
         </form>
       </Modal>

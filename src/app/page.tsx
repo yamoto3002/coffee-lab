@@ -57,32 +57,32 @@ export default function Home() {
 
   return (
     <div className="lab-shell">
-      <header className="border-b border-[var(--border)] px-5 py-6 md:px-10 md:py-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header className="page-header px-5 py-5 md:px-10 md:py-7">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--muted-foreground)]">{formatDate(todayDateString())}</p>
             <h1 className="page-title mt-1">今日の実験</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">焙煎、テイスティング、振り返りを一つずつ進めます。</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">記録を残し、味を確かめ、次の条件を決めます。</p>
           </div>
           <SyncStatus message={syncMessage} tone={syncTone} onRetry={() => void sync()} compact />
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 py-6 pb-28 md:px-10 md:py-8">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,.75fr)]">
-          <div className="space-y-10">
+      <main className="mx-auto max-w-7xl px-5 py-6 pb-28 md:px-10 md:py-9">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,.6fr)] lg:gap-12">
+          <div className="space-y-9">
             <section aria-labelledby="next-action-title">
               <div className="mb-4 flex items-center justify-between gap-4">
-                <h2 id="next-action-title" className="text-lg font-bold text-[var(--foreground)]">次にすること</h2>
-                <span className="text-xs text-[var(--muted-foreground)]">おすすめを1件表示</span>
+                <h2 id="next-action-title" className="section-heading">次にすること</h2>
+                <span className="text-[.8125rem] text-[var(--muted-foreground)]">記録から1件を提案</span>
               </div>
               {primaryInsight && (
-                <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-5 md:p-6">
-                  <p className="text-xs font-semibold text-[var(--primary)]">{primaryInsight.type === 'tasting' ? 'テイスティング' : primaryInsight.type === 'inventory' ? '生豆管理' : '焙煎ノート'}</p>
-                  <h3 className="mt-2 text-xl font-bold text-[var(--foreground)]">{primaryInsight.title}</h3>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">{primaryInsight.message}</p>
+                <div className="recommendation-bench p-5 pr-14 md:p-7 md:pr-24">
+                  <p className="text-[.8125rem] font-semibold text-[var(--primary)]">{primaryInsight.type === 'tasting' ? '味を確かめる' : primaryInsight.type === 'inventory' ? '生豆を整える' : '条件を見返す'}</p>
+                  <h3 className="mt-2 max-w-2xl text-xl font-bold leading-snug tracking-[-.015em] text-[var(--foreground)] md:text-2xl">{primaryInsight.title}</h3>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{primaryInsight.message}</p>
                   {primaryInsight.actionHref && primaryInsight.actionLabel && (
-                    <Link href={primaryInsight.actionHref} className="tap-button mt-5 inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-[var(--primary-foreground)]">
+                    <Link href={primaryInsight.actionHref} className="tap-button roast-actuator relative z-10 mt-6 inline-flex min-h-12 items-center gap-2 px-5 py-3 text-sm font-bold">
                       {primaryInsight.actionLabel}<ArrowRight className="h-4 w-4" />
                     </Link>
                   )}
@@ -91,7 +91,7 @@ export default function Home() {
             </section>
 
             <section aria-labelledby="quick-actions-title">
-              <h2 id="quick-actions-title" className="mb-3 text-lg font-bold text-[var(--foreground)]">すぐに記録する</h2>
+              <h2 id="quick-actions-title" className="section-heading mb-3">すぐに記録する</h2>
               <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
                 <QuickAction href="/roasts/new" icon={<Flame className="h-5 w-5" />} title="焙煎を始める" description="タイマーで Crack と Drop を記録" primary />
                 <QuickAction href="/roasts" icon={<History className="h-5 w-5" />} title="焙煎記録を見る" description="テイスティングや比較へ進む" />
@@ -103,11 +103,11 @@ export default function Home() {
           <aside className="space-y-8" aria-label="最近の記録と進み具合">
             <section>
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-[var(--foreground)]">最近の記録</h2>
+                <h2 className="section-heading">最近の記録</h2>
                 <Link href="/roasts" className="tap-button text-sm font-semibold text-[var(--primary)]">すべて見る</Link>
               </div>
               {latestRoast ? (
-                <Link href={`/roasts/${latestRoast.id}`} className="tap-button block rounded-[10px] bg-[var(--surface)] p-4">
+                <Link href={`/roasts/${latestRoast.id}`} className="tap-button block border-y border-[var(--border)] py-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-mono text-sm font-bold text-[var(--foreground)]">{latestRoast.id}</span>
                     <span className="text-xs text-[var(--muted-foreground)]">{formatDate(latestRoast.roastDate)}</span>
@@ -116,7 +116,7 @@ export default function Home() {
                   <p className="mt-1 text-sm text-[var(--muted-foreground)]">Drop {latestRoast.dropTime || '未記録'} · {latestRoast.greenWeight}g</p>
                 </Link>
               ) : (
-                <div className="rounded-[10px] bg-[var(--surface)] p-4 text-sm leading-6 text-[var(--muted-foreground)]">
+                <div className="border-y border-[var(--border)] py-4 text-sm leading-6 text-[var(--muted-foreground)]">
                   <Coffee className="mb-3 h-5 w-5 text-[var(--primary)]" />
                   最初の焙煎を保存すると、ここからテイスティングと比較へ進めます。
                 </div>
@@ -140,7 +140,7 @@ export default function Home() {
 }
 
 function QuickAction({ href, icon, title, description, primary = false }: { href: string; icon: React.ReactNode; title: string; description: string; primary?: boolean }) {
-  return <Link href={href} className="tap-button flex min-h-[4.75rem] items-center gap-4 py-3"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] ${primary ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--surface-raised)] text-[var(--muted-foreground)]'}`}>{icon}</span><span className="min-w-0 flex-1"><span className="block font-semibold text-[var(--foreground)]">{title}</span><span className="mt-0.5 block text-sm text-[var(--muted-foreground)]">{description}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" /></Link>;
+  return <Link href={href} className="tap-button flex min-h-[5rem] items-center gap-4 py-3"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] ${primary ? 'actuator-button text-[var(--primary-foreground)]' : 'bg-[var(--surface-raised)] text-[var(--muted-foreground)]'}`}>{icon}</span><span className="min-w-0 flex-1"><span className="block font-semibold text-[var(--foreground)]">{title}</span><span className="mt-0.5 block text-sm text-[var(--muted-foreground)]">{description}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" /></Link>;
 }
 
 function ProgressCount({ label, value }: { label: string; value: number }) {

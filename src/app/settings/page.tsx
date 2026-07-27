@@ -102,7 +102,7 @@ export default function SettingsPage() {
 
   return (
     <div className="lab-shell flex min-h-screen flex-col">
-      <header className="border-b border-[var(--border)] bg-[var(--background)] px-4 py-4 md:px-6">
+      <header className="page-header px-4 py-5 md:px-6">
         <div className="flex items-center gap-3">
           {view !== 'main' && (
             <button onClick={() => setView(view === 'danger' ? 'data' : 'main')} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="戻る">
@@ -121,7 +121,7 @@ export default function SettingsPage() {
 
         {view === 'main' && (
           <>
-            <section className="lab-card-soft space-y-5 rounded-xl p-6">
+            <section className="instrument-panel space-y-5 md:px-6">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
                 <Cloud className="h-4 w-4 text-[var(--accent)]" />
                 同期とバックアップ
@@ -130,19 +130,19 @@ export default function SettingsPage() {
               <Stats beans={beans.length} roasts={roasts.length} tastings={tastings.filter(t => t.status === 'completed').length} />
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <button onClick={retryPendingSync} disabled={isBusy} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:opacity-60">
+                <button onClick={retryPendingSync} disabled={isBusy} className="btn-secondary tap-button flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
                   <RefreshCw className="h-4 w-4" />
                   未同期データを再送
                 </button>
-                <button onClick={syncFromCloud} disabled={isBusy} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 disabled:opacity-60">
+                <button onClick={syncFromCloud} disabled={isBusy} className="btn-secondary tap-button flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
                   <RefreshCw className="h-4 w-4" />
                   Google Sheetsから更新
                 </button>
-                <button onClick={handleExport} className="tap-button flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200">
+                <button onClick={handleExport} className="btn-secondary tap-button flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold">
                   <Download className="h-4 w-4" />
                   JSONバックアップ
                 </button>
-                <label className="tap-button flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200">
+                <label className="btn-secondary tap-button flex cursor-pointer items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold">
                   <Upload className="h-4 w-4" />
                   JSONから復元
                   <input type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
@@ -150,7 +150,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="lab-card-soft rounded-xl p-6">
+            <section className="instrument-panel md:px-6">
               <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-300">
                 <FileText className="h-4 w-4 text-[var(--accent)]" />
                 レポート
@@ -159,7 +159,7 @@ export default function SettingsPage() {
               <Link href="/report" className="btn-primary tap-button mt-4 inline-flex">レポートを開く</Link>
             </section>
 
-            <section className="lab-card-soft rounded-xl p-6">
+            <section className="instrument-panel md:px-6">
               <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-300">
                 <ShieldAlert className="h-4 w-4 text-amber-200" />
                 データ管理
@@ -171,7 +171,7 @@ export default function SettingsPage() {
         )}
 
         {view === 'data' && (
-          <section className="lab-card-soft space-y-5 rounded-xl p-6">
+          <section className="instrument-panel space-y-5 md:px-6">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
               <ShieldAlert className="h-4 w-4 text-amber-200" />
               データ管理
@@ -215,7 +215,7 @@ export default function SettingsPage() {
 
 function Stats({ beans, roasts, tastings }: { beans: number; roasts: number; tastings: number }) {
   return (
-    <div className="grid grid-cols-3 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 text-center text-xs text-slate-400">
+    <div className="grid grid-cols-3 border-y border-[var(--border)] py-3 text-center text-xs text-[var(--muted-foreground)]">
       <Stat label="生豆" value={`${beans}件`} />
       <Stat label="焙煎" value={`${roasts}件`} />
       <Stat label="味見" value={`${tastings}件`} />
