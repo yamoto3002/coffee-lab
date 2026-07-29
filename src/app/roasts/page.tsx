@@ -74,8 +74,8 @@ export default function RoastsPage() {
     : syncMessage;
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col">
-      <header className="page-header flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+    <div className="lab-shell flex min-h-screen flex-col" data-surface="roast">
+      <header className="page-header flex flex-col gap-5 px-4 pb-5 pt-8 sm:flex-row sm:items-end sm:justify-between md:px-8 md:pb-7 md:pt-10">
         <div>
           <h1 className="page-title">焙煎記録</h1>
           <p className="text-sm text-[var(--muted-foreground)]">時間・火力・味見を、ひとつの実験として追跡します。</p>
@@ -92,12 +92,12 @@ export default function RoastsPage() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_40%,transparent)] p-4 md:flex-row md:items-center md:justify-between">
+      <div className="roast-filter-bench mx-4 flex flex-col gap-3 p-3 md:mx-8 md:flex-row md:items-center md:justify-between">
         <div className="relative w-full md:w-80">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
           <input aria-label="焙煎記録を検索" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="ID、生豆名、国で検索" className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-4 text-base text-[var(--foreground)]" />
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:flex md:flex-wrap">
+        <div className="roast-filter-controls grid grid-cols-1 gap-2 sm:grid-cols-3">
           <select aria-label="味見状態で絞り込み" value={tastingFilter} onChange={event => setTastingFilter(event.target.value as TastingFilter)} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]">
             <option value="all">すべて</option>
             <option value="tasted">味見済み</option>
@@ -113,11 +113,19 @@ export default function RoastsPage() {
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 p-4 pb-24 md:p-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-8 md:px-8 md:pt-10">
         {sortedRoasts.length === 0 ? (
           <EmptyState title="まだ焙煎記録がありません" message="最初の実験を保存すると、プロファイル・味見・比較がここにつながります。" actionLabel="最初の焙煎を記録" actionHref="/roasts/new" />
         ) : (
-          sortedRoasts.map(roast => {
+          <section className="roast-ledger" aria-label="焙煎記録">
+            <div className="mb-4 flex items-end justify-between">
+              <div>
+                <span className="eyebrow text-[var(--text-faint)]">ROAST LOG</span>
+                <h2 className="section-heading mt-1">記録されたバッチ</h2>
+              </div>
+              <span className="font-mono text-sm text-[var(--text-muted)]">{sortedRoasts.length}件</span>
+            </div>
+            {sortedRoasts.map(roast => {
             const bean = beanFor(roast.beanId);
             const score = maxScore(roast.id);
             const rating = maxRating(roast.id);
@@ -168,7 +176,8 @@ export default function RoastsPage() {
                 </Link>
               </div>
             );
-          })
+            })}
+          </section>
         )}
       </main>
     </div>

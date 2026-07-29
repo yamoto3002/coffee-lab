@@ -5,8 +5,8 @@ import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
   applicationName: "Coffee Lab",
-  title: "Coffee Lab — Roast, Taste, Learn",
-  description: "焙煎の経過、味の記憶、次の実験を静かにつなぐコーヒーラボ。",
+  title: "Coffee Lab — 焙煎記録",
+  description: "SY-121Nの焙煎、テイスティング、生豆在庫を記録する個人用ツール。",
   manifest: "/manifest.webmanifest",
 };
 
@@ -26,10 +26,10 @@ export default function RootLayout({
       lang="ja"
       className="h-full antialiased dark"
     >
-      <body className="min-h-full overflow-x-hidden text-[var(--foreground)]">
-        <div className="flex min-h-screen flex-col md:flex-row relative z-10">
+      <body className="min-h-dvh overflow-x-hidden text-[var(--foreground)]">
+        <div className="app-frame flex min-h-dvh flex-col md:flex-row">
           <Navigation />
-          <main className="flex-1 pb-20 md:pb-0 min-h-screen relative overflow-x-hidden">
+          <main className="app-main relative min-h-dvh flex-1 overflow-x-hidden">
             {children}
           </main>
         </div>

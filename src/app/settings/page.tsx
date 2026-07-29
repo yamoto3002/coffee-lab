@@ -101,8 +101,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col">
-      <header className="page-header px-4 py-5 md:px-6">
+    <div className="lab-shell flex min-h-screen flex-col" data-surface="settings">
+      <header className="page-header px-4 pb-5 pt-8 md:px-8 md:pb-7 md:pt-10">
         <div className="flex items-center gap-3">
           {view !== 'main' && (
             <button onClick={() => setView(view === 'danger' ? 'data' : 'main')} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="戻る">
@@ -116,7 +116,7 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 pb-24 md:p-6">
+      <div className="settings-workspace mx-auto w-full max-w-4xl flex-1 space-y-5 px-4 pb-28 md:px-8">
         {message && <div className="lab-card-soft rounded-2xl px-4 py-3"><SyncStatus message={message.text} tone={message.type === 'success' ? 'success' : 'error'} /></div>}
 
         {view === 'main' && (

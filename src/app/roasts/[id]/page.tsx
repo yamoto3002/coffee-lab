@@ -5,12 +5,10 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, Clock, FileText, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import CoachInsightCard from '@/components/CoachInsightCard';
 import SyncStatus from '@/components/SyncStatus';
 import BatchBalance from '@/components/BatchBalance';
 import RoastTape from '@/components/RoastTape';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { getInsightsForRoast, getLiveRoastCoachInsight } from '@/lib/coach';
 import { DBService, getAgingDays, getRoastBatchBalance, secondsToTime, timeToSeconds } from '@/lib/db';
 import { formatDate } from '@/lib/date';
 import { Bean, Roast, RoastStep, Tasting } from '@/types';
@@ -23,9 +21,6 @@ export default function RoastDetailPage() {
   const [bean, setBean] = useState<Bean | null>(null);
   const [steps, setSteps] = useState<RoastStep[]>([]);
   const [tastings, setTastings] = useState<Tasting[]>([]);
-  const [allBeans, setAllBeans] = useState<Bean[]>([]);
-  const [allRoasts, setAllRoasts] = useState<Roast[]>([]);
-  const [allTastings, setAllTastings] = useState<Tasting[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'roast' } | { type: 'tasting'; tasting: Tasting } | { type: 'step'; step: RoastStep } | null>(null);
 
@@ -39,9 +34,6 @@ export default function RoastDetailPage() {
     setBean(DBService.getBeanById(currentRoast.beanId) || null);
     setSteps(DBService.getRoastSteps(id));
     setTastings(DBService.getTastingsForRoast(id));
-    setAllBeans(DBService.getBeans());
-    setAllRoasts(DBService.getRoasts());
-    setAllTastings(DBService.getTastings());
   }, [id, router]);
 
   useEffect(() => {
@@ -114,11 +106,9 @@ export default function RoastDetailPage() {
     ? `${roast.developmentTime} / ${roast.developmentRatio}%`
     : '不明';
   const accent = bean?.themeColor || '#D9A066';
-  const coachInsight = getInsightsForRoast({ beans: allBeans, roasts: allRoasts, tastings: allTastings }, id)[0]
-    || getLiveRoastCoachInsight(roast, allRoasts);
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col">
+    <div className="lab-shell flex min-h-screen flex-col" data-surface="roast">
       <header className="page-header sticky top-0 z-[var(--z-sticky)] flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div className="flex items-center gap-3">
           <Link href="/roasts" className="tap-button rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white">
@@ -153,7 +143,7 @@ export default function RoastDetailPage() {
               <Metric label="焙煎後" value={`${roast.roastedWeight}g`} />
             </div>
             <div className="mt-4 flex justify-between border-t border-white/10 pt-3 font-mono text-sm">
-              <span className="text-slate-500">Loss</span>
+              <span className="text-slate-500">減量（目安）</span>
               <strong>{roast.lossRatio}%</strong>
             </div>
           </Panel>
@@ -174,8 +164,6 @@ export default function RoastDetailPage() {
         <section aria-label="焙煎から味見までの記録">
           <RoastTape roast={roast} steps={steps} tastings={tastings} bean={bean} />
         </section>
-
-        <section aria-label="記録から導いた比較メモ"><CoachInsightCard insight={{ ...coachInsight, actionHref: undefined, actionLabel: undefined }} featured /></section>
 
         {(!roast.firstCrackTime || roast.firstCrackStatus === 'not_detected' || roast.firstCrackStatus === 'unknown') && (
           <section className="rounded-xl border border-amber-300/20 bg-amber-400/10 p-4 text-sm text-amber-100">
@@ -285,7 +273,7 @@ export default function RoastDetailPage() {
           )}
         </section>
       </main>
-      <ConfirmDialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} onConfirm={confirmDelete} title={deleteTarget?.type === 'roast' ? '焙煎記録を削除しますか？' : deleteTarget?.type === 'tasting' ? 'テイスティング記録を削除しますか？' : 'タイムラインイベントを削除しますか？'} description={deleteTarget?.type === 'roast' ? `${roast.id} と紐付く${tastings.length}件のテイスティングを削除します。` : deleteTarget?.type === 'tasting' ? `#${deleteTarget.tasting.tastingIndex} の味見記録を削除します。` : `${deleteTarget?.type === 'step' ? deleteTarget.step.time : ''} のイベントを削除します。`} consequence={deleteTarget?.type === 'roast' ? '関連する味見とタイムラインも削除され、復元できません。' : '削除後に残量とコーチの仮説が再計算されます。この操作は復元できません。'} />
+      <ConfirmDialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} onConfirm={confirmDelete} title={deleteTarget?.type === 'roast' ? '焙煎記録を削除しますか？' : deleteTarget?.type === 'tasting' ? 'テイスティング記録を削除しますか？' : 'タイムラインイベントを削除しますか？'} description={deleteTarget?.type === 'roast' ? `${roast.id} と紐付く${tastings.length}件のテイスティングを削除します。` : deleteTarget?.type === 'tasting' ? `#${deleteTarget.tasting.tastingIndex} の味見記録を削除します。` : `${deleteTarget?.type === 'step' ? deleteTarget.step.time : ''} のイベントを削除します。`} consequence={deleteTarget?.type === 'roast' ? '関連する味見とタイムラインも削除され、復元できません。' : '削除後に残量目安が再計算されます。この操作は復元できません。'} />
     </div>
   );
 }

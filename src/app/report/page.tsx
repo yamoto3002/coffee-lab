@@ -91,7 +91,7 @@ export default function ReportPage() {
           ) : (
             <table className="report-table">
               <thead>
-                <tr><th>ID</th><th>日付</th><th>生豆</th><th>投入</th><th>焙煎後</th><th>Loss</th><th>1st</th><th>2nd</th><th>Drop</th><th>Dev</th></tr>
+                <tr><th>ID</th><th>日付</th><th>生豆</th><th>投入</th><th>焙煎後</th><th>減量目安</th><th>1st</th><th>2nd</th><th>Drop</th><th>Dev</th></tr>
               </thead>
               <tbody>
                 {roasts.map(roast => (
