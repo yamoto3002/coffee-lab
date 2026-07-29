@@ -4,11 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Minus, Plus, Save, Star, Trash2 } from 'lucide-react';
-import CoachInsightCard from '@/components/CoachInsightCard';
 import FlavorWheel from '@/components/FlavorWheel';
 import SyncStatus from '@/components/SyncStatus';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { getTastingCoachInsight } from '@/lib/coach';
 import { DBService } from '@/lib/db';
 import { diffDateDays, formatDate, todayDateString } from '@/lib/date';
 import { FLAVOR_CATEGORIES, findFlavorPath, flavorColor } from '@/lib/flavorWheel';
@@ -59,7 +57,7 @@ export default function TastingPage() {
   const [tastingId, setTastingId] = useState('');
   const [tastingIndex, setTastingIndex] = useState(1);
   const [tastingDate, setTastingDate] = useState(todayDateString());
-  const [doseGrams, setDoseGrams] = useState('');
+  const [doseGrams, setDoseGrams] = useState('11');
   const [scores, setScores] = useState<Record<ScoreKey, number>>(defaultScores);
   const [rating, setRating] = useState(0);
   const [flavors, setFlavors] = useState<string[]>([]);
@@ -92,7 +90,9 @@ export default function TastingPage() {
       setTastingId(existing?.id || DBService.generateNextTastingId(id));
       setTastingIndex(existing?.tastingIndex || nextIndex);
       setTastingDate(existing?.tastingDate || todayDateString());
-      setDoseGrams(existing?.doseGrams ? String(existing.doseGrams) : '');
+      setDoseGrams(existing
+        ? existing.doseGramsRecorded === false ? '' : String(existing.doseGrams)
+        : '11');
 
       if (existing) {
         setScores({
@@ -146,8 +146,7 @@ export default function TastingPage() {
   const toggleFlavor = (label: string) => {
     setIsDirty(true);
     setFlavors(list => {
-      if (list.includes(label)) return list.filter(item => item !== label);
-      if (list.length >= 6) return list;
+      if (list.includes(label)) return list;
       return [...list, label];
     });
   };
@@ -208,27 +207,27 @@ export default function TastingPage() {
     if (!tastingId || !DBService.getTastingById(tastingId)) return;
     DBService.deleteTasting(tastingId, false);
     void DBService.deleteTastingFromCloud(tastingId);
-    router.push(`/roasts/${id}`);
+    router.push('/dashboard');
   };
 
   if (!roast) return null;
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col">
-      <header className="page-header sticky top-0 z-[var(--z-sticky)] flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+    <div className="lab-shell flex min-h-screen flex-col" data-surface="tasting">
+      <header className="page-header tasting-command-header sticky top-0 z-[var(--z-sticky)] flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
         <div className="flex items-center gap-3">
-          <Link href={`/roasts/${id}`} className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white">
+          <Link href="/dashboard" className="tap-button rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="テイスティング一覧へ戻る">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
             <h1 className="text-xl font-bold">味見の記録 #{tastingIndex}</h1>
-            <p className="truncate text-sm text-slate-400">{roast.id} / {bean?.name || '生豆不明'} / {formatDate(tastingDate)} / 焙煎から{dayAfterRoast}日</p>
+            <p className="truncate text-sm text-slate-400">{roast.id} / {bean?.name || '生豆不明'} / {formatDate(tastingDate)} / {dayAfterRoast}日</p>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 md:justify-end">
-          <div className="text-right">
+          <div className="tasting-total text-right">
             <span className="block text-xs text-slate-400">合計スコア</span>
-            <span className="font-mono text-2xl font-extrabold text-[var(--primary)]">{liveScore.toFixed(1)}<span className="ml-1 text-xs font-normal text-slate-400">/100</span></span>
+            <span className="font-mono font-extrabold text-[var(--primary)]">{liveScore.toFixed(1)}<span className="ml-1 text-xs font-normal text-slate-400">/100</span></span>
           </div>
           {DBService.getTastingById(tastingId) && (
             <button onClick={() => setDeleteDialogOpen(true)} className="tap-button rounded-lg border border-red-300/20 bg-red-400/10 p-2 text-red-200" aria-label="削除">
@@ -244,14 +243,13 @@ export default function TastingPage() {
 
       {syncMessage && <div className="border-b border-white/10 bg-white/[0.025] px-4 py-2 md:px-6"><SyncStatus message={syncMessage} tone="pending" compact /></div>}
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:p-6">
-        {savedTasting && <section className="lg:col-span-2"><CoachInsightCard insight={{ ...getTastingCoachInsight(roast, savedTasting), actionHref: undefined, actionLabel: undefined }} featured /><div className="mt-3 flex justify-end"><Link href={`/roasts/${id}`} className="btn-secondary tap-button inline-flex items-center gap-2">焙煎詳細へ戻る<ArrowLeft className="h-4 w-4 rotate-180" /></Link></div></section>}
+      <main className="tasting-workspace mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 pb-28 lg:grid-cols-[1.05fr_0.95fr] lg:p-8">
         <section className="order-1 space-y-6">
-          <Panel title="基本情報">
+          <Panel title="基本情報" className="tasting-basics">
             <div className="grid gap-4 md:grid-cols-3">
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">テイスティング日</span>
-                <input type="date" value={tastingDate} onChange={event => { setTastingDate(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+                <input type="date" value={tastingDate} onChange={event => { setTastingDate(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">焙煎から</span>
@@ -259,12 +257,12 @@ export default function TastingPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-400">使用した豆量(g)</span>
-                <input type="number" inputMode="decimal" value={doseGrams} onChange={event => { setDoseGrams(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-sm" />
+                <input type="number" inputMode="decimal" min="0" step="0.1" value={doseGrams} onChange={event => { setDoseGrams(event.target.value); setIsDirty(true); }} className="w-full rounded-lg border border-white/10 bg-[#101827] px-3 py-2 text-base" />
               </label>
             </div>
           </Panel>
 
-          <Panel title="スコア (0-10)">
+          <Panel title="スコア (0-10)" className="tasting-score-panel">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {SCORE_FIELDS.map(field => (
                 <ScoreControl key={field.key} label={field.label} description={field.description} value={scores[field.key]} onChange={value => updateScore(field.key, value)} accent="var(--primary)" />
@@ -274,7 +272,7 @@ export default function TastingPage() {
         </section>
 
         <section className="order-2 space-y-6">
-          <Panel title="フレーバー">
+          <Panel title="フレーバー" className="tasting-flavor-panel">
             <FlavorWheel
               activeCategory={activeCategory}
               activeSubcategory={activeSubcategory}
@@ -333,7 +331,7 @@ export default function TastingPage() {
           </CollapsiblePanel>
         </section>
       </main>
-      <ConfirmDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={deleteTasting} title="テイスティング記録を削除しますか？" description={`Day${dayAfterRoast}の味見記録を削除します。`} consequence="削除後は予想残量とコーチの仮説が再計算されます。この操作は復元できません。" />
+      <ConfirmDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={deleteTasting} title="テイスティング記録を削除しますか？" description={`${dayAfterRoast}日目の味見記録を削除します。`} consequence="残量目安が再計算されます。この操作は復元できません。" />
     </div>
   );
 }
@@ -357,16 +355,16 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
   };
 
   return (
-    <div className="space-y-3 border-t border-[var(--border)] py-4 first:border-t-0">
+    <div className="score-control space-y-3 border-t border-[var(--border)] py-3 first:border-t-0 md:py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-sm font-semibold">{label}</span>
-          <span className="block text-xs text-slate-400">{description}</span>
+          <span className="score-description hidden text-xs text-slate-400 md:block">{description}</span>
         </div>
-        <input aria-label={`${label}の数値`} type="number" inputMode="decimal" min="0" max="10" step="0.1" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commitDraft} className="w-20 rounded-lg border border-white/10 bg-[#101827] px-2 py-1 text-right font-mono text-base" style={{ color: accent }} />
+        <input aria-label={`${label}の数値`} type="number" inputMode="decimal" min="0" max="10" step="0.1" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commitDraft} className="score-value-input rounded-lg border border-white/10 bg-[#101827] px-2 py-1 text-right font-mono text-base" style={{ color: accent, width: '5rem', flex: '0 0 5rem' }} />
       </div>
       <input aria-label={`${label}のスライダー`} type="range" min="0" max="10" step="1" value={Math.round(value)} onChange={event => onChange(Number(event.target.value))} className="w-full" style={{ accentColor: accent }} />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="score-step-buttons hidden grid-cols-2 gap-2 md:grid">
         <button type="button" aria-label={`${label}を0.1下げる`} onClick={() => onChange(value - 0.1)} className="tap-button inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300">
           <Minus className="h-3 w-3" />0.1
         </button>
@@ -378,9 +376,9 @@ function ScoreControl({ label, description, value, onChange, accent }: { label: 
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className="instrument-panel">
+    <section className={`instrument-panel ${className}`}>
       <h2 className="mb-3 text-sm font-semibold text-[var(--text-secondary)]">{title}</h2>
       {children}
     </section>

@@ -6,10 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Clock, Flame, Play, RotateCcw, Save, Square, Timer, Trash2, Wind } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Bean, Roast, RoastStep } from '@/types';
-import CoachInsightCard from '@/components/CoachInsightCard';
 import SyncStatus from '@/components/SyncStatus';
 import Modal from '@/components/Modal';
-import { getLiveRoastCoachInsight } from '@/lib/coach';
 import { calculateDevRatio, calculateDevTime, calculateLossRatio, DBService, secondsToTime, timeToSeconds } from '@/lib/db';
 import { todayDateString } from '@/lib/date';
 
@@ -350,13 +348,9 @@ function NewRoastContent() {
     return Array.from(map.values()).sort((a, b) => Number(a.secs) - Number(b.secs));
   }, [ghostSteps, timeline]);
 
-  const dropCoachInsight = useMemo(() => {
-    if (!dropTime) return null;
-    return getLiveRoastCoachInsight(buildDraftRoast(), pastRoasts);
-  }, [buildDraftRoast, dropTime, pastRoasts]);
   return (
-    <div className="lab-shell min-h-screen text-[var(--foreground)]" data-phase={phase}>
-      <header className="sticky top-0 z-[var(--z-sticky)] flex min-h-[4.5rem] items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-6">
+    <div className="lab-shell min-h-screen text-[var(--foreground)]" data-phase={phase} data-surface="roast">
+      <header className="roast-command-header sticky top-0 z-[var(--z-sticky)] flex min-h-[4.5rem] items-center justify-between gap-3 px-4 py-3 md:px-6">
         <div className="flex items-center gap-3">
           <Link href="/roasts" className="tap-button inline-flex h-11 w-11 items-center justify-center rounded-[10px] text-[var(--muted-foreground)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]" aria-label="焙煎記録へ戻る">
             <ArrowLeft className="h-5 w-5" />
@@ -382,7 +376,7 @@ function NewRoastContent() {
         </div>
       )}
 
-      <div className="sticky top-[4.5rem] z-[var(--z-sticky)] grid grid-cols-2 border-b border-[var(--border)] bg-[var(--background)]" role="tablist" aria-label="記録方法">
+      <div className="roast-mode-switch sticky top-[4.5rem] z-[var(--z-sticky)] mx-auto grid w-[calc(100%-2rem)] max-w-xl grid-cols-2 p-1" role="tablist" aria-label="記録方法">
         <button type="button" role="tab" aria-selected={tabMode === 'live'} onClick={() => setTabMode('live')} className={`tap-button flex items-center justify-center gap-2 border-b-2 py-3 text-sm font-semibold ${tabMode === 'live' ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted-foreground)]'}`}>
           <Timer className="h-4 w-4" /> タイマー
         </button>
@@ -392,7 +386,7 @@ function NewRoastContent() {
       </div>
 
       {tabMode === 'live' ? (
-        <main className={`roast-control-grid gap-4 p-3 sm:p-4 lg:p-6 ${hasStarted ? 'is-active' : ''}`}>
+        <main className={`roast-control-grid gap-5 p-3 pb-28 sm:p-5 sm:pb-28 lg:p-8 ${hasStarted ? 'is-active' : ''}`}>
           <section className={`roast-batch-panel space-y-4 ${hasStarted ? 'hidden' : ''}`}>
             <Panel title="バッチ設定" compact>
               <label className="space-y-1 block">
@@ -403,7 +397,7 @@ function NewRoastContent() {
                 </select>
                 {beans.length === 0 && <Link href="/beans" className="tap-button inline-flex min-h-11 items-center text-sm font-semibold text-[var(--primary)]">生豆を登録する</Link>}
               </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3">
                 <label className="space-y-1 block">
                   <span className="text-sm font-medium text-[var(--muted-foreground)]">焙煎日</span>
                   <input type="date" value={roastDate} onChange={event => setRoastDate(event.target.value)} className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-base" />
@@ -429,11 +423,15 @@ function NewRoastContent() {
           </section>
 
           <section className={`roast-primary-panel space-y-3 ${!hasStarted ? 'hidden lg:block' : ''}`}>
-            <section className="lab-card roast-instrument relative overflow-hidden rounded-[12px] p-5 text-center md:p-7">
+            <section className="lab-card roast-instrument relative overflow-hidden p-5 text-center md:p-8">
               <div className="flex items-center justify-between text-left"><span className="text-sm font-medium text-[var(--muted-foreground)]">{dropTime ? '計測完了 · 保存待ち' : hasStarted ? '焙煎中 · 端末に記録中' : '開始前の確認'}</span><span className="status-pill border-[var(--border)] bg-[var(--surface-raised)] text-[var(--foreground)]">{dropTime ? '完了' : isRunning ? '計測中' : hasStarted ? '一時停止' : '準備中'}</span></div>
-              <div className="timer-display mt-5 font-mono text-[4.25rem] font-bold text-[var(--foreground)] sm:text-7xl lg:text-8xl">{currentTime}</div>
+              <div className="roast-clock timer-display mt-7 font-mono font-semibold text-[var(--foreground)]">{currentTime}</div>
               <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">{hasStarted ? `火力 ${liveHeat} / 風量 ${liveAir} · 変化が起きたら下のボタンで記録` : beans.length === 0 ? '開始する前に、生豆を登録してください。' : '豆・投入量・火力・風量を確認して開始します。'}</p>
-              <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 border-y border-[var(--border)]">
+              <div className="roast-live-readouts mx-auto mt-6 grid max-w-lg grid-cols-2">
+                <div><span>火力</span><strong>{liveHeat}</strong></div>
+                <div><span>風量</span><strong>{liveAir}</strong></div>
+              </div>
+              <div className="mx-auto mt-4 grid max-w-xs grid-cols-2">
                 <Stat label="Dev" value={devTime || '不明'} />
                 <Stat label="Dev%" value={devRatio === null ? '不明' : `${devRatio}%`} />
               </div>
@@ -449,7 +447,7 @@ function NewRoastContent() {
                 </button>
               )}
             </section>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="roast-milestone-grid grid grid-cols-3 gap-2 sm:gap-3">
               <MilestoneButton label="1st Crack" time={firstCrackTime} onClick={() => recordMilestone('1st Crack', 'firstCrackTime')} disabled={!hasStarted || Boolean(dropTime)} color="orange" />
               <MilestoneButton label="2nd Crack" time={secondCrackTime} onClick={() => recordMilestone('2nd Crack', 'secondCrackTime')} disabled={!hasStarted || Boolean(dropTime)} color="red" />
               <MilestoneButton label="Drop" time={dropTime} onClick={() => recordMilestone('Drop', 'dropTime')} disabled={!hasStarted || Boolean(dropTime)} color="stone" />
@@ -488,7 +486,6 @@ function NewRoastContent() {
           </section>
 
           <section className="roast-secondary-panel space-y-4">
-            {dropCoachInsight && <CoachInsightCard insight={{ ...dropCoachInsight, actionHref: undefined, actionLabel: undefined }} featured />}
             {firstCrackTime && !dropTime && (
               <p className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--accent)]">
                 1st Crack後の Development は、現在時刻から計算しています。
@@ -592,8 +589,11 @@ function Panel({ title, children, compact = false }: { title: string; children: 
 function NumberControl({ icon, label, value, onChange, color }: { icon: React.ReactNode; label: string; value: number; onChange: (value: number) => void; color: 'orange' | 'blue' }) {
   const activeClass = color === 'orange' ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]' : 'border-[var(--accent)] bg-[var(--accent)] text-[#10201f]';
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm font-bold text-[#E4E4E7]">{icon}{label}<span className="font-mono text-[#8E8E93]">{value}</span></div>
+    <div className={`number-field space-y-3 ${color === 'orange' ? 'is-heat' : 'is-air'}`}>
+      <div className="number-field-head">
+        <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-secondary)]">{icon}{label}</div>
+        <span className="font-mono">{value}</span>
+      </div>
       <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-1">
         {CONTROL_VALUES.map(item => (
           <button key={item} type="button" aria-pressed={item === value} aria-label={`${label} ${item}`} onClick={() => onChange(item)} className={`tap-button h-11 w-11 shrink-0 rounded-[10px] border text-sm font-bold ${item === value ? activeClass : 'border-[var(--border)] bg-[var(--surface-raised)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>{item}</button>

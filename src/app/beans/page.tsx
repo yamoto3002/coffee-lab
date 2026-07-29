@@ -280,8 +280,8 @@ export default function BeansPage() {
   };
 
   return (
-    <div className="lab-shell flex min-h-screen flex-col">
-      <header className="page-header flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-6">
+    <div className="lab-shell flex min-h-screen flex-col" data-surface="beans">
+      <header className="page-header flex flex-col gap-5 px-4 pb-5 pt-8 md:flex-row md:items-end md:justify-between md:px-8 md:pb-7 md:pt-10">
         <div>
           <h1 className="page-title">生豆台帳</h1>
           <p className="text-sm text-[var(--muted-foreground)]">産地情報と購入量を、焙煎記録の基準として残します。</p>
@@ -298,9 +298,9 @@ export default function BeansPage() {
         </div>
       </header>
 
-      <main className="grid flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(300px,38%)_1fr]">
-        <section className="border-r border-[var(--border)] bg-[var(--background)]">
-          <div className="border-b border-[var(--border)] p-4">
+      <main className="bean-workspace mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-4 px-4 pb-28 md:grid-cols-[minmax(300px,36%)_1fr] md:px-8">
+        <section className="bean-index">
+          <div className="p-3">
             <div className="relative">
               <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
               <input
@@ -314,13 +314,13 @@ export default function BeansPage() {
             </div>
           </div>
 
-          <div className="max-h-[44vh] divide-y divide-[var(--border)] overflow-y-auto md:max-h-[calc(100vh-154px)]">
+          <div className="bean-index-list max-h-[44vh] overflow-y-auto md:max-h-[calc(100vh-190px)]">
             {filteredBeans.map(bean => {
               const selected = bean.id === selectedBeanId;
               const color = bean.themeColor || '#D9A066';
               const stockIsLow = bean.currentWeight <= Math.max(50, bean.initialWeight * 0.15);
               return (
-                <button key={bean.id} type="button" aria-pressed={selected} onClick={() => selectBean(bean.id)} className={`tap-button block w-full p-4 text-left ${selected ? 'bg-[var(--surface-raised)]' : 'hover:bg-white/[0.035]'}`}>
+                <button key={bean.id} type="button" aria-pressed={selected} onClick={() => selectBean(bean.id)} className={`bean-index-row tap-button block w-full p-4 text-left ${selected ? 'is-selected' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -346,7 +346,7 @@ export default function BeansPage() {
           </div>
         </section>
 
-        <section ref={detailRef} className="scroll-mt-4 overflow-y-auto p-4 md:p-6">
+        <section ref={detailRef} className="bean-detail-stage scroll-mt-4 overflow-y-auto p-4 md:p-6">
           {selectedBean ? (
             <BeanDetail
               bean={selectedBean}
@@ -417,7 +417,7 @@ function BeanDetail({ bean, roasts, onEdit, onDelete }: { bean: Bean; roasts: Ro
   const color = bean.themeColor || '#00DFFF';
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="bean-detail mx-auto max-w-4xl space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -467,7 +467,7 @@ function BeanDetail({ bean, roasts, onEdit, onDelete }: { bean: Bean; roasts: Ro
           <Link href={`/roasts/new?beanId=${bean.id}`} className="btn-primary tap-button">この豆を焙煎</Link>
         </div>
         {roasts.map(roast => (
-          <Link key={roast.id} href={`/roasts/${roast.id}`} className="tap-button flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+          <Link key={roast.id} href={`/roasts/${roast.id}`} className="bean-history-row tap-button flex items-center justify-between gap-4 p-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <span className="font-mono text-cyan-100">{roast.id}</span>
@@ -502,7 +502,7 @@ function SyncPill({ status, message, pendingCount }: { status: 'synced' | 'synci
 
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="lab-card-soft min-w-0 rounded-xl p-4">
+    <div className="bean-metric min-w-0 p-4">
       <span className="block text-xs text-slate-500">{label}</span>
       <strong className="mt-1 block break-words font-mono text-lg" style={{ color }}>{value}</strong>
     </div>

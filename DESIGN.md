@@ -2,18 +2,18 @@
 name: Coffee Lab
 description: A calm instrument bench for roast, tasting, and learning records.
 colors:
-  canvas: "#090C0B"
-  surface: "#121714"
-  surface-raised: "#1C241F"
-  border: "#303833"
-  ink: "#F4F0E7"
-  ink-muted: "#A8B1A9"
-  copper: "#E4A45E"
-  copper-ink: "#1B120A"
-  info: "#72C8BE"
-  success: "#73C89A"
-  warning: "#E5BC67"
-  danger: "#E77D70"
+  canvas: "#0A0D11"
+  surface: "#11171D"
+  surface-raised: "#19212A"
+  border: "#29333E"
+  ink: "#E9EDF2"
+  ink-muted: "#929CA7"
+  steel: "#83ABC4"
+  steel-ink: "#071118"
+  info: "#84B49E"
+  success: "#7FBE98"
+  warning: "#D7B56D"
+  danger: "#DE8178"
 typography:
   headline:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Hiragino Sans, Yu Gothic UI, sans-serif"
@@ -53,8 +53,8 @@ spacing:
   xl: "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.copper}"
-    textColor: "{colors.copper-ink}"
+    backgroundColor: "{colors.steel}"
+    textColor: "{colors.steel-ink}"
     rounded: "{rounded.md}"
     padding: "12px 18px"
     height: "44px"
@@ -78,13 +78,13 @@ components:
 
 **Creative North Star: "焙煎台の計器盤"**
 
-Coffee Lab feels like the instrument bench beside a working roaster: dark enough for a dim room, warm enough to belong beside coffee, and precise enough that elapsed time and state can be trusted at a glance. Information is arranged by task sequence and operational priority. Familiar controls disappear into the work; personality comes from disciplined typography, tactile copper accents, and the cadence of real roast data.
+Coffee Lab feels like the instrument bench beside a working roaster: dark enough for a dim room and precise enough that elapsed time and state can be trusted at a glance. Information is arranged by task sequence and operational priority. Familiar controls disappear into the work; personality comes from disciplined typography, a mineral-blue instrument accent, and the cadence of real roast data.
 
 The system explicitly rejects marketing hero composition, generic AI/SaaS card dashboards, neon cyberpunk decoration, purple gradients, decorative grids, glassmorphism, and constant glow. Desktop offers breadth for comparison; mobile preserves the same hierarchy with reachable controls and no horizontal dependence.
 
 **Key Characteristics:**
 
-- Restrained dark tonal layers with one warm action accent.
+- Restrained graphite layers with one mineral-blue action accent.
 - Japanese-first labels with tabular numerals for time, weight, and scores.
 - Flat-by-default surfaces, 1px structural dividers, and scarce elevation.
 - One obvious primary action per task region.
@@ -93,11 +93,11 @@ The system explicitly rejects marketing hero composition, generic AI/SaaS card d
 
 ## Colors
 
-The palette is charcoal and espresso-neutral, with copper reserved for primary action and current selection. Semantic colors identify status but never carry meaning alone.
+The palette is charcoal and graphite-neutral, with mineral blue reserved for primary action and current selection. Semantic colors identify status but never carry meaning alone.
 
 ### Primary
 
-- **Roaster Copper:** Used for the single primary action, selected controls, and the most important current-state marker.
+- **Instrument Blue:** Used for the single primary action, selected controls, and the most important current-state marker.
 
 ### Secondary
 
@@ -112,7 +112,7 @@ The palette is charcoal and espresso-neutral, with copper reserved for primary a
 - **Quiet Label:** Secondary text that remains WCAG AA compliant.
 - **Structural Border:** Dividers and boundaries, not decorative boxes.
 
-**The Copper Budget Rule.** Copper occupies less than ten percent of a routine product screen. Its rarity creates priority.
+**The Accent Budget Rule.** Instrument Blue occupies less than ten percent of a routine product screen. Its rarity creates priority.
 
 **The State Sentence Rule.** Teal, green, amber, and red always appear with an icon and plain-language status or recovery text.
 
@@ -144,13 +144,13 @@ The system is flat by default. Depth is conveyed through tonal contrast and stru
 ### Buttons
 
 - **Shape:** Firm, gently rounded corners (10px), minimum 44px height.
-- **Primary:** Roaster Copper with dark ink; one primary action per region.
+- **Primary:** Instrument Blue with dark ink; one primary action per region.
 - **Hover / Focus:** Small tonal lift and a 2px visible focus outline; active state compresses to 0.98 without bounce.
 - **Secondary / Ghost:** Raised Instrument or transparent; full labels accompany icons for important actions.
 
 ### Chips
 
-- **Style:** Compact filters only, not decorative tags. Unselected chips use a structural border; selected chips use a quiet copper tint and explicit checked/selected semantics.
+- **Style:** Compact filters only, not decorative tags. Unselected chips use a structural border; selected chips use a quiet mineral-blue tint and explicit checked/selected semantics.
 - **State:** Minimum 40px on desktop and 44px on touch surfaces.
 
 ### Cards / Containers
@@ -171,7 +171,7 @@ The system is flat by default. Depth is conveyed through tonal contrast and stru
 
 - **Desktop:** a quiet persistent rail with five direct destinations and one clear new-roast actuator.
 - **Mobile:** five dock positions—Home, Beans, the raised Roast Actuator, Roasts, and More. More contains lower-frequency Analysis and Settings destinations with full labels and descriptions.
-- Active state uses weight, icon, and a restrained copper marker—not glow or a side stripe.
+- Active state uses weight, icon, and a restrained mineral-blue marker—not glow or a side stripe.
 
 ### Roast Timeline
 
